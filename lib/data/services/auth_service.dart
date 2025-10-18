@@ -1,13 +1,9 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/user_profile.dart'; // Assicurati che il percorso del modello sia corretto
+import '../models/user_profile.dart';
 
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
-
-  // NUOVO METODO: Non si passa più il Client ID qui.
-  // Si usa l'istanza globale fornita dal pacchetto.
-  static final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   /// Sessione utente corrente
   static Session? get currentSession => _supabase.auth.currentSession;
@@ -20,49 +16,55 @@ class AuthService {
   /// Controlla se l'utente è autenticato
   static bool get isAuthenticated => currentSession != null;
 
-  /// 1. AUTENTICAZIONE GOOGLE (CODICE COMPLETAMENTE CORRETTO)
+  /// 1. AUTENTICAZIONE GOOGLE
   static Future<AuthResponse> signInWithGoogle() async {
     try {
-      // NUOVO METODO: La funzione per avviare il login ora è .authenticate()
-      final GoogleSignInAccount? googleUser = await _googleSignIn
+      // STEP 1: Inizializza GoogleSignIn
+      await GoogleSignIn.instance.initialize(
+        // TODO: Sostituisci con il tuo WEB Client ID
+        serverClientId:
+            '57199450253-8144397hpp8a68lis9assv013jsvaqdc.apps.googleusercontent.com',
+      );
+
+      // STEP 2: Avvia il processo di login
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
           .authenticate();
 
-      // Se l'utente chiude la finestra di login, googleUser sarà null
       if (googleUser == null) {
         throw Exception('Login con Google annullato dall\'utente.');
       }
 
-      // Ottieni i token di autenticazione
+      // STEP 3: Ottieni i token di autenticazione
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-      final idToken = googleAuth.idToken;
 
-      // L'accessToken non è più disponibile in questo oggetto e non serve a Supabase
+      final String? idToken = googleAuth.idToken;
+
       if (idToken == null) {
         throw Exception(
-          'ID Token non trovato. Assicurati che la configurazione OAuth sia corretta.',
+          'ID Token non trovato. Verifica la configurazione OAuth.',
         );
       }
 
-      // Esegui l'accesso a Supabase usando SOLO l'idToken.
+      // STEP 4: Autentica con Supabase
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
       );
 
+      // STEP 5: Crea/aggiorna il profilo utente
       if (response.user != null) {
         await _createOrUpdateProfile(response.user!);
       }
 
       return response;
     } catch (e) {
-      // Stampiamo l'errore per un debug più facile in futuro
-      print('Errore dettagliato durante il login con Google: $e');
-      throw Exception('Login con Google fallito.');
+      print('🔴 Errore Google Sign-In: $e');
+      rethrow;
     }
   }
 
-  /// 2. AUTENTICAZIONE EMAIL (INVARIATO)
+  /// 2. AUTENTICAZIONE EMAIL
   static Future<AuthResponse> signInWithEmail({
     required String email,
     required String password,
@@ -81,7 +83,7 @@ class AuthService {
     }
   }
 
-  /// 3. REGISTRAZIONE EMAIL (INVARIATO)
+  /// 3. REGISTRAZIONE EMAIL
   static Future<AuthResponse> signUpWithEmail({
     required String email,
     required String password,
@@ -99,7 +101,7 @@ class AuthService {
     }
   }
 
-  /// 4. AUTENTICAZIONE SMS (INVARIATO)
+  /// 4. AUTENTICAZIONE SMS
   static Future<void> signInWithPhone(String phoneNumber) async {
     try {
       await _supabase.auth.signInWithOtp(phone: phoneNumber);
@@ -108,7 +110,7 @@ class AuthService {
     }
   }
 
-  /// 5. VERIFICA OTP (INVARIATO)
+  /// 5. VERIFICA OTP
   static Future<AuthResponse> verifyOTP({
     required String token,
     required OtpType type,
@@ -131,7 +133,7 @@ class AuthService {
     }
   }
 
-  /// 6. RECUPERO PASSWORD (INVARIATO)
+  /// 6. RECUPERO PASSWORD
   static Future<void> resetPassword(String email) async {
     try {
       await _supabase.auth.resetPasswordForEmail(email);
@@ -140,17 +142,18 @@ class AuthService {
     }
   }
 
-  /// 7. SIGN OUT (CODICE CORRETTO)
+  /// 7. SIGN OUT
   static Future<void> signOut() async {
     try {
-      await _googleSignIn.signOut();
+      await GoogleSignIn.instance.signOut();
       await _supabase.auth.signOut();
     } catch (e) {
+      print('🔴 Errore Sign Out: $e');
       throw Exception('Sign out fallito: $e');
     }
   }
 
-  /// Helper: Crea o aggiorna il profilo utente (INVARIATO)
+  /// Helper: Crea o aggiorna il profilo utente
   static Future<void> _createOrUpdateProfile(User user) async {
     try {
       final existingProfile = await _supabase
@@ -183,7 +186,7 @@ class AuthService {
     }
   }
 
-  /// Ottieni profilo utente (INVARIATO)
+  /// Ottieni profilo utente
   static Future<UserProfile?> getUserProfile() async {
     if (!isAuthenticated) return null;
     try {
