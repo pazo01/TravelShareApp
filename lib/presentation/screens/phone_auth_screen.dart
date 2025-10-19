@@ -123,11 +123,13 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
+                  LengthLimitingTextInputFormatter(15),
                 ],
                 decoration: InputDecoration(
                   labelText: 'Numero di telefono',
-                  hintText: '3XX XXX XXXX',
+                  hintText: _selectedCountry.code == '+39' 
+                      ? '3XX XXX XXXX' 
+                      : 'Numero',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -379,7 +381,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // IMPORTANTE: Formato E.164 richiesto da Twilio
+      // Esempio: +393123456789 (senza spazi)
       final fullPhone = '${_selectedCountry.code}$phone';
+      
+      print('📞 Invio OTP a: $fullPhone'); // Debug
+      
       await AuthService.signInWithPhone(fullPhone);
       
       if (mounted) {
@@ -390,6 +397,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         _showSuccess('Codice inviato con successo!');
       }
     } catch (e) {
+      print('🔴 Errore invio OTP: $e'); // Debug
       _showError('Errore: ${e.toString()}');
       if (mounted) {
         setState(() => _isLoading = false);
@@ -401,7 +409,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     final otp = _otpController.text.trim();
     
     if (otp.length != 6) {
-      _showError('Inserisci il codice completo');
+      _showError('Inserisci il codice completo (6 cifre)');
       return;
     }
 
@@ -409,6 +417,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
 
     try {
       final fullPhone = '${_selectedCountry.code}${_phoneController.text.trim()}';
+      
+      print('✅ Verifica OTP: $otp per $fullPhone'); // Debug
       
       await AuthService.verifyOTP(
         token: otp,
@@ -421,6 +431,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         // TODO: Navigate to home
       }
     } catch (e) {
+      print('🔴 Errore verifica OTP: $e'); // Debug
       _showError('Codice non valido: ${e.toString()}');
       if (mounted) {
         setState(() => _isLoading = false);
