@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'presentation/screens/auth_test_screen.dart';
+import 'presentation/screens/welcome_screen.dart';
 
 class TravelShareApp extends StatelessWidget {
   const TravelShareApp({super.key});
@@ -8,8 +8,26 @@ class TravelShareApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TravelShare',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
-      home: const AuthTestScreen(),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 2,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+        ),
+      ),
+      home: const WelcomeScreen(),
     );
   }
 }
