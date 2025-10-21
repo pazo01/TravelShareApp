@@ -9,6 +9,7 @@ void main() async {
   // Inizializza Supabase
   await SupabaseConfig.initialize();
   
+  
   runApp(
     const ProviderScope(
       child: TravelShareApp(),

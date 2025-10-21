@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
+import '../screens/home_screen.dart';
 import 'password_recovery_screen.dart';
 
 class EmailAuthScreen extends StatefulWidget {
@@ -231,7 +232,11 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         );
         if (mounted) {
           _showSuccess('Accesso effettuato con successo!');
-          // TODO: Navigate to home
+          // After successful login
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+
         }
       } else {
         await AuthService.signUpWithEmail(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+//import 'presentation/widgets/auth_gate.dart'; // adjust path to where your auth_gate.dart is
 import 'presentation/screens/welcome_screen.dart';
 
 class TravelShareApp extends StatelessWidget {
