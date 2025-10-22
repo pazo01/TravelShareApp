@@ -1,6 +1,7 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
+import '../../core/config/supabase_config.dart';
 
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -19,14 +20,11 @@ class AuthService {
   /// 1. AUTENTICAZIONE GOOGLE
   static Future<AuthResponse> signInWithGoogle() async {
     try {
-      // STEP 1: Inizializza GoogleSignIn
       await GoogleSignIn.instance.initialize(
-        // TODO: Sostituisci con il tuo WEB Client ID
         serverClientId:
             '57199450253-8144397hpp8a68lis9assv013jsvaqdc.apps.googleusercontent.com',
       );
 
-      // STEP 2: Avvia il processo di login
       final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
           .authenticate();
 
@@ -34,7 +32,6 @@ class AuthService {
         throw Exception('Login con Google annullato dall\'utente.');
       }
 
-      // STEP 3: Ottieni i token di autenticazione
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
@@ -46,13 +43,11 @@ class AuthService {
         );
       }
 
-      // STEP 4: Autentica con Supabase
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
       );
 
-      // STEP 5: Crea/aggiorna il profilo utente
       if (response.user != null) {
         await _createOrUpdateProfile(response.user!);
       }
@@ -133,16 +128,30 @@ class AuthService {
     }
   }
 
-  /// 6. RECUPERO PASSWORD
+  /// 6. RECUPERO PASSWORD - Invia email con link di reset
   static Future<void> resetPassword(String email) async {
     try {
-      await _supabase.auth.resetPasswordForEmail(email);
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: SupabaseConfig.redirectUrl,
+      );
     } catch (e) {
       throw Exception('Recupero password fallito: $e');
     }
   }
 
-  /// 7. SIGN OUT
+  /// 7. AGGIORNA PASSWORD - Dopo aver cliccato sul link
+  static Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } catch (e) {
+      throw Exception('Aggiornamento password fallito: $e');
+    }
+  }
+
+  /// 8. SIGN OUT
   static Future<void> signOut() async {
     try {
       await GoogleSignIn.instance.signOut();

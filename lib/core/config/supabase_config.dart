@@ -11,8 +11,7 @@ class SupabaseConfig {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
-      // ✅ Configurazione deep link
-      authOptions: FlutterAuthClientOptions(
+      authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
       ),
     );
