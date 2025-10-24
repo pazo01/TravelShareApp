@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 //import 'presentation/widgets/auth_gate.dart'; // adjust path to where your auth_gate.dart is
 import 'presentation/screens/welcome_screen.dart';
+import 'main.dart' show navigatorKey;
 
 class TravelShareApp extends StatelessWidget {
   const TravelShareApp({super.key});
@@ -10,6 +11,7 @@ class TravelShareApp extends StatelessWidget {
     return MaterialApp(
       title: 'TravelShare',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey, // ✅ Importante per deep link
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,

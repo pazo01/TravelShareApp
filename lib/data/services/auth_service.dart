@@ -20,14 +20,11 @@ class AuthService {
   /// 1. AUTENTICAZIONE GOOGLE
   static Future<AuthResponse> signInWithGoogle() async {
     try {
-      // STEP 1: Inizializza GoogleSignIn
       await GoogleSignIn.instance.initialize(
-        // TODO: Sostituisci con il tuo WEB Client ID
         serverClientId:
             '57199450253-8144397hpp8a68lis9assv013jsvaqdc.apps.googleusercontent.com',
       );
 
-      // STEP 2: Avvia il processo di login
       final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
           .authenticate();
 
@@ -35,7 +32,6 @@ class AuthService {
         throw Exception('Login con Google annullato dall\'utente.');
       }
 
-      // STEP 3: Ottieni i token di autenticazione
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
@@ -47,13 +43,11 @@ class AuthService {
         );
       }
 
-      // STEP 4: Autentica con Supabase
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
       );
 
-      // STEP 5: Crea/aggiorna il profilo utente
       if (response.user != null) {
         await _createOrUpdateProfile(response.user!);
       }
