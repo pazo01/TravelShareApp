@@ -1,6 +1,7 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
+import '../../core/config/supabase_config.dart';
 
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -133,16 +134,30 @@ class AuthService {
     }
   }
 
-  /// 6. RECUPERO PASSWORD
+  /// 6. RECUPERO PASSWORD - Invia email con link di reset
   static Future<void> resetPassword(String email) async {
     try {
-      await _supabase.auth.resetPasswordForEmail(email);
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: SupabaseConfig.redirectUrl,
+      );
     } catch (e) {
       throw Exception('Recupero password fallito: $e');
     }
   }
 
-  /// 7. SIGN OUT
+  /// 7. AGGIORNA PASSWORD - Dopo aver cliccato sul link
+  static Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } catch (e) {
+      throw Exception('Aggiornamento password fallito: $e');
+    }
+  }
+
+  /// 8. SIGN OUT
   static Future<void> signOut() async {
     try {
       await GoogleSignIn.instance.signOut();
