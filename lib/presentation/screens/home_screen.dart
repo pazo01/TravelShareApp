@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
-import 'flight_screen.dart'; // ✅ import the FlightScreen
+import 'flight_screen.dart';
+import 'destination_picker_screen.dart'; // 🟩 import the destination picker screen
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,7 +17,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Position? currentPosition;
   String? locationError;
   bool isLoading = true;
-  int _selectedIndex = 0; // ✅ index for the bottom nav bar
+  int _selectedIndex = 0;
+
+  // 🟩 new variables to store destination info
+  String? _selectedAddress;
+  double? _selectedLat;
+  double? _selectedLng;
 
   @override
   void initState() {
@@ -55,9 +61,29 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // 🟩 1️⃣ Function to open the destination picker
+  Future<void> _openDestinationPicker() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DestinationPickerScreen()),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedAddress = result['address'];
+        _selectedLat = result['lat'];
+        _selectedLng = result['lng'];
+      });
+
+      // 🟩 show a confirmation message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Destinazione selezionata: $_selectedAddress')),
+      );
+    }
+  }
+
   void _onItemTapped(int index) {
     if (index == 1) {
-      // ✅ Navigate to FlightScreen when airplane icon tapped
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const FlightScreen()),
@@ -120,6 +146,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     )
                   else
                     const CircularProgressIndicator(),
+
+                  const SizedBox(height: 30),
+
+                  // 🟩 2️⃣ New button for destination picker
+                  ElevatedButton.icon(
+                    onPressed: _openDestinationPicker,
+                    icon: const Icon(Icons.map),
+                    label: const Text('Scegli Destinazione'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+
+                  // 🟩 3️⃣ Show selected destination below
+                  if (_selectedAddress != null) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Destinazione selezionata:',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(_selectedAddress!),
+                  ],
                 ],
               ),
       ),
@@ -139,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.flight_takeoff),
             label: 'Flights',
           ),
-          // 🟩 You can easily add more icons here later
         ],
       ),
     );
