@@ -12,49 +12,67 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<OnboardingPage> _pages = [
+  late final List<OnboardingPage> _pages = [
     OnboardingPage(
       image: Icons.flight_takeoff,
       title: 'Condividi il Taxi dall\'Aeroporto',
       description:
-          'Trova altri viaggiatori del tuo stesso volo e risparmia fino al 75% sul costo del taxi',
+          'Trova altri viaggiatori del tuo stesso volo e risparmia fino al 75% sul costo del taxi.',
       color: Colors.blue,
     ),
     OnboardingPage(
       image: Icons.people,
       title: 'Matching Intelligente',
       description:
-          'Il nostro algoritmo ti abbina automaticamente con persone che vanno nella tua direzione',
+          'L’algoritmo ti abbina con persone che vanno nella tua direzione.',
       color: Colors.green,
     ),
     OnboardingPage(
       image: Icons.chat,
       title: 'Chat con Traduzione',
       description:
-          'Comunica facilmente con altri viaggiatori internazionali grazie alla traduzione automatica',
+          'Parla con viaggiatori internazionali grazie alla traduzione automatica.',
       color: Colors.orange,
     ),
     OnboardingPage(
       image: Icons.verified_user,
       title: 'Sistema di Reputazione',
       description:
-          'Viaggia in sicurezza con utenti verificati e valutazioni affidabili',
+          'Utenti verificati e valutazioni affidabili per viaggiare in sicurezza.',
       color: Colors.purple,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button
-            Align(
-              alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: _goToAuth,
-                child: const Text('Salta'),
+            // Header con Skip / Indietro
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  if (_currentPage > 0)
+                    IconButton(
+                      tooltip: 'Indietro',
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: () => _pageController.previousPage(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOut,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _goToAuth,
+                    child: const Text('Salta'),
+                  ),
+                ],
               ),
             ),
 
@@ -62,58 +80,70 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() => _currentPage = index);
-                },
+                physics: const BouncingScrollPhysics(),
+                onPageChanged: (index) => setState(() => _currentPage = index),
                 itemCount: _pages.length,
-                itemBuilder: (context, index) {
-                  return _buildPage(_pages[index]);
-                },
+                itemBuilder: (context, index) => _buildPage(_pages[index]),
               ),
             ),
 
             // Dots indicator
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _pages.length,
-                (index) => _buildDot(index == _currentPage),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _pages.length,
+                  (i) => _buildDot(i == _currentPage),
+                ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
 
-            // Next/Get Started button
+            // CTA
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _currentPage == _pages.length - 1
-                      ? _goToAuth
-                      : _nextPage,
+                  onPressed:
+                      _currentPage == _pages.length - 1 ? _goToAuth : _nextPage,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _pages[_currentPage].color,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Text(
-                    _currentPage == _pages.length - 1
-                        ? 'Inizia ora'
-                        : 'Avanti',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (w, a) =>
+                        FadeTransition(opacity: a, child: w),
+                    child: Text(
+                      _currentPage == _pages.length - 1 ? 'Inizia ora' : 'Avanti',
+                      key: ValueKey(_currentPage == _pages.length - 1),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
 
-            const SizedBox(height: 32),
+            // Link Accedi (opzionale)
+            TextButton(
+              onPressed: _goToAuth,
+              child: Text(
+                'Hai già un account? Accedi',
+                style: TextStyle(color: cs.primary),
+              ),
+            ),
+
+            const SizedBox(height: 14),
           ],
         ),
       ),
@@ -121,50 +151,56 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildPage(OnboardingPage page) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            page.image,
-            size: 120,
-            color: page.color,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxIcon = (constraints.maxWidth * 0.28).clamp(96, 140).toDouble();
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Semantics(
+                label: page.title,
+                child: Icon(page.image, size: maxIcon, color: page.color),
+              ),
+              const SizedBox(height: 36),
+              Text(
+                page.title,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: page.color,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                page.description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.8),
+                      height: 1.5,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          const SizedBox(height: 40),
-          Text(
-            page.title,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: page.color,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            page.description,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildDot(bool isActive) {
-    return Container(
+    final color = isActive
+        ? _pages[_currentPage].color
+        : Colors.grey.withOpacity(0.35);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 4),
       width: isActive ? 24 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: isActive
-            ? _pages[_currentPage].color
-            : Colors.grey.withOpacity(0.3),
+        color: color,
         borderRadius: BorderRadius.circular(4),
       ),
     );
@@ -172,8 +208,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _nextPage() {
     _pageController.nextPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
     );
   }
 

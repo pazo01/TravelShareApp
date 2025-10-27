@@ -28,6 +28,7 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -41,9 +42,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- 🌍 Permessi di localizzazione iOS -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>La tua posizione è usata per trovare gruppi e destinazioni vicine.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>La tua posizione è usata per aggiornare la posizione del taxi anche in background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>TravelShare usa la tua posizione per migliorare il matching e la navigazione.</string>
 </dict>
 </plist>
