@@ -1,8 +1,9 @@
+// lib/presentation/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/services/auth_service.dart';
 import 'auth_screen.dart';
-import 'search_flight_screen.dart';
+import 'flight_screen.dart'; // 👈 Usa FlightScreen invece di SearchFlightScreen
 import 'my_trips_screen.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
@@ -18,7 +19,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
-    const SearchFlightScreen(),
+    const FlightScreen(), // 👈 CAMBIATO QUI
     const MyTripsScreen(),
     const ChatScreen(),
     const ProfileScreen(),
@@ -26,9 +27,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   final List<NavigationDestination> _destinations = const [
     NavigationDestination(
-      icon: Icon(Icons.search),
-      selectedIcon: Icon(Icons.search, size: 28),
-      label: 'Cerca',
+      icon: Icon(Icons.flight_takeoff), // 👈 Cambiato icona
+      selectedIcon: Icon(Icons.flight_takeoff, size: 28),
+      label: 'Nuovo Viaggio', // 👈 Cambiato label
     ),
     NavigationDestination(
       icon: Icon(Icons.luggage_outlined),
@@ -82,7 +83,3 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
-
-
-
-
