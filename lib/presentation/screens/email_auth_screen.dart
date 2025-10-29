@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
 import 'password_recovery_screen.dart';
+import 'home_screen.dart';
 
 class EmailAuthScreen extends StatefulWidget {
   const EmailAuthScreen({super.key});
@@ -231,7 +232,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         );
         if (mounted) {
           _showSuccess('Accesso effettuato con successo!');
-          // TODO: Navigate to home
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
         }
       } else {
         await AuthService.signUpWithEmail(
@@ -243,6 +247,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
           _showSuccess(
             'Registrazione completata! Controlla la tua email per verificare l\'account.',
           );
+          // Dopo la registrazione, mantieni l'utente sulla schermata per vedere il messaggio
+          // L'utente deve verificare l'email prima di poter accedere
+          setState(() => _isLogin = true);
         }
       }
     } catch (e) {
