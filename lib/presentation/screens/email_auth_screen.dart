@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
 import '../screens/home_screen.dart';
+import '../screens/trips_screen.dart';
 import 'password_recovery_screen.dart';
 
 class EmailAuthScreen extends StatefulWidget {
