@@ -29,47 +29,100 @@ class FlightService {
       }
     }
 
-    // Chiamata API
-    final params = {
+    // PRIMO TENTATIVO: con data (se fornita)
+    try {
+      return await _fetchFlight(flightNumber, dateStr, includeDate: date != null);
+    } catch (e) {
+      print('⚠️ Tentativo con data fallito: $e');
+      
+      // SECONDO TENTATIVO: senza data (piano gratuito potrebbe non supportarla)
+      if (date != null) {
+        print('🔄 Riprovo senza parametro data...');
+        try {
+          return await _fetchFlight(flightNumber, dateStr, includeDate: false);
+        } catch (e2) {
+          print('❌ Anche senza data ha fallito: $e2');
+          rethrow;
+        }
+      }
+      rethrow;
+    }
+  }
+
+  /// Metodo interno per effettuare la chiamata API
+  Future<Map<String, dynamic>> _fetchFlight(
+    String flightNumber,
+    String dateStr,
+    {required bool includeDate}
+  ) async {
+    final params = <String, String>{
       'access_key': ApiKeys.aviationStack,
       'flight_iata': flightNumber.toUpperCase(),
     };
-    
-    if (date != null) {
+
+    // Aggiungi data solo se richiesto
+    if (includeDate) {
       params['flight_date'] = dateStr;
     }
 
-    final url = Uri.parse(_baseUrl).replace(queryParameters: params);
+    // IMPORTANTE: Costruisci URL HTTP manualmente per piano gratuito (non supporta HTTPS)
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+    final urlString = 'http://api.aviationstack.com/v1/flights?$queryString';
+    
+    print('🔍 Fetching flight: $flightNumber${includeDate ? ' for date: $dateStr' : ' (no date)'}');
+    print('🔗 URL: $urlString');
+    
+    final response = await http.get(Uri.parse(urlString)).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw Exception('Timeout nella ricerca del volo'),
+    );
 
-    try {
-      print('🔍 Fetching flight: $flightNumber for date: $dateStr');
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Timeout nella ricerca del volo'),
-      );
+    print('📡 Response status: ${response.statusCode}');
+    print('📄 Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...');
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['data'] != null && data['data'].isNotEmpty) {
-          final flightData = data['data'][0];
-          
-          // Salva in cache
-          _cache[cacheKey] = CachedFlight(
-            data: flightData,
-            timestamp: DateTime.now(),
-          );
-          
-          return flightData;
-        }
-        throw Exception('Volo non trovato');
-      } else if (response.statusCode == 401) {
-        throw Exception('API Key non valida. Verifica la tua chiave AviationStack');
-      } else {
-        throw Exception('Errore API: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      
+      // Controlla se ci sono errori nella risposta
+      if (data['error'] != null) {
+        final errorMsg = data['error']['message'] ?? data['error']['info'] ?? 'Unknown error';
+        final errorCode = data['error']['code'];
+        throw Exception('API Error ($errorCode): $errorMsg');
       }
-    } catch (e) {
-      print('❌ Errore FlightService: $e');
-      rethrow;
+      
+      if (data['data'] != null && data['data'].isNotEmpty) {
+        final flightData = data['data'][0];
+        
+        // Salva in cache
+        final cacheKey = '${flightNumber}_$dateStr';
+        _cache[cacheKey] = CachedFlight(
+          data: flightData,
+          timestamp: DateTime.now(),
+        );
+        
+        return flightData;
+      }
+      throw Exception('Volo non trovato nei risultati');
+    } else if (response.statusCode == 401) {
+      throw Exception('API Key non valida. Verifica la tua chiave AviationStack');
+    } else if (response.statusCode == 403) {
+      // Proviamo a decodificare il body per vedere il messaggio esatto
+      try {
+        final errorData = json.decode(response.body);
+        final errorMsg = errorData['error']?['info'] ?? errorData['error']?['message'] ?? 'Accesso negato';
+        throw Exception('403 - $errorMsg');
+      } catch (_) {
+        throw Exception('403 - Accesso negato. Il piano gratuito supporta solo HTTP. Possibili cause:\n'
+            '1) API Key non attiva o scaduta\n'
+            '2) Limite mensile raggiunto (1000 chiamate/mese)\n'
+            '3) Parametri non supportati dal piano gratuito');
+      }
+    } else if (response.statusCode == 429) {
+      throw Exception('Limite di richieste superato (max 1000/mese per piano gratuito)');
+    } else {
+      throw Exception('Errore API: ${response.statusCode} - ${response.body}');
     }
   }
 

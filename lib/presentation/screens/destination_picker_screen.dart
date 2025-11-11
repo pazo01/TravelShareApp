@@ -40,20 +40,34 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
       final position = await _locationService.getCurrentPosition();
       if (position != null && mounted) {
         final point = LatLng(position.latitude, position.longitude);
-        _mapController.move(point, 15);
-        setState(() {
-          _selectedPoint = point;
-        });
-        _getAddressFromLatLng(point);
+        if (mounted) {
+          _mapController.move(point, 15);
+          setState(() {
+            _selectedPoint = point;
+          });
+          _getAddressFromLatLng(point);
+        }
+      }
+    } on LocationServiceException catch (e) {
+      // Errore gestito: mostra solo un messaggio senza bloccare l'app
+      print('⚠️ Location error (handled): ${e.title} - ${e.message}');
+      if (mounted) {
+        // Centra su Roma se non riesce
+        _mapController.move(LatLng(41.9028, 12.4964), 13);
       }
     } catch (e) {
-      // Se non riesce, centra su Roma
-      _mapController.move(LatLng(41.9028, 12.4964), 13);
+      print('❌ Unexpected location error: $e');
+      if (mounted) {
+        // Se non riesce, centra su Roma
+        _mapController.move(LatLng(41.9028, 12.4964), 13);
+      }
     }
   }
 
   /// Converte coordinate in indirizzo
   Future<void> _getAddressFromLatLng(LatLng position) async {
+    if (!mounted) return;
+    
     try {
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -69,10 +83,12 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
       }
     } catch (e) {
       print("Errore geocoding inverso: $e");
-      setState(() {
-        _selectedAddress = "Lat: ${position.latitude.toStringAsFixed(4)}, "
-                          "Lng: ${position.longitude.toStringAsFixed(4)}";
-      });
+      if (mounted) {
+        setState(() {
+          _selectedAddress = "Lat: ${position.latitude.toStringAsFixed(4)}, "
+                            "Lng: ${position.longitude.toStringAsFixed(4)}";
+        });
+      }
     }
   }
 

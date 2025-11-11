@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class PhoneAuthScreen extends StatefulWidget {
-  const PhoneAuthScreen({super.key});
+class LinkPhoneScreen extends StatefulWidget {
+  const LinkPhoneScreen({super.key});
 
   @override
-  State<PhoneAuthScreen> createState() => _PhoneAuthScreenState();
+  State<LinkPhoneScreen> createState() => _LinkPhoneScreenState();
 }
 
-class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
+class _LinkPhoneScreenState extends State<LinkPhoneScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   
@@ -18,7 +18,13 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   
   String _debugInfo = '';
   String? _lastPhoneUsed;
-  String? _currentSessionId;
+  String? _originalUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCurrentUser();
+  }
 
   @override
   void dispose() {
@@ -27,7 +33,19 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     super.dispose();
   }
 
-  // 📱 Invia OTP
+  void _checkCurrentUser() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      _originalUserId = user.id;
+      print('💾 [LINK_PHONE] User corrente: ${user.id}');
+      print('💾 [LINK_PHONE] Email: ${user.email}');
+      print('💾 [LINK_PHONE] Phone attuale: ${user.phone}');
+    } else {
+      print('⚠️ [LINK_PHONE] Nessun utente autenticato');
+    }
+  }
+
+  // 📱 Invia OTP per associare telefono
   Future<void> _sendOTP() async {
     final phone = _phoneController.text.trim();
     
@@ -41,19 +59,31 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       return;
     }
 
+    // Verifica che ci sia un utente autenticato
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      _showError('Devi essere autenticato per associare un telefono');
+      return;
+    }
+
     setState(() {
       _isLoading = true;
-      _debugInfo = '📤 Invio OTP in corso...';
+      _debugInfo = '📤 Invio OTP per associazione...';
     });
 
     try {
-      print('🔵 [PHONE_AUTH] Invio OTP al numero: $phone');
+      print('🔵 [LINK_PHONE] Invio OTP al numero: $phone');
+      print('🔵 [LINK_PHONE] User ID: ${currentUser.id}');
       
-      await Supabase.instance.client.auth.signInWithOtp(
-        phone: phone,
+      // Usa updateUser per aggiungere il telefono
+      // Questo invierà un OTP al nuovo numero
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(
+          phone: phone,
+        ),
       );
 
-      print('🟢 [PHONE_AUTH] OTP inviato con successo');
+      print('🟢 [LINK_PHONE] OTP inviato con successo');
 
       setState(() {
         _otpSent = true;
@@ -65,22 +95,40 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Codice OTP inviato!'),
+            content: Text('✅ Codice OTP inviato! Verifica per confermare.'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
-      print('🔴 [PHONE_AUTH] Errore invio OTP: $e');
+      print('🔴 [LINK_PHONE] Errore invio OTP: $e');
       setState(() {
         _isLoading = false;
         _debugInfo = '❌ Errore: $e';
       });
-      _showError('Errore invio OTP: ${e.toString()}');
+      
+      String errorMessage = 'Errore invio OTP';
+      
+      // Gestione errori specifici
+      if (e.toString().contains('already registered') || 
+          e.toString().contains('phone_exists')) {
+        errorMessage = '⚠️ Questo numero è già associato ad un altro account.\n\n'
+                      'Opzioni:\n'
+                      '1. Usa un numero diverso\n'
+                      '2. Se è il tuo numero, rimuovilo dall\'altro account prima';
+        
+        // Mostra dialog più dettagliato
+        _showPhoneExistsDialog(phone);
+        return;
+      } else if (e.toString().contains('invalid phone')) {
+        errorMessage = 'Formato numero non valido. Usa formato: +39...';
+      }
+      
+      _showError(errorMessage);
     }
   }
 
-  // ✅ Verifica OTP - VERSIONE SEMPLIFICATA
+  // ✅ Verifica OTP e completa l'associazione
   Future<void> _verifyOTP() async {
     final phone = _phoneController.text.trim();
     final otp = _otpController.text.trim();
@@ -90,82 +138,81 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       return;
     }
 
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      _showError('Sessione non valida');
+      return;
+    }
+
     setState(() {
       _isLoading = true;
-      _debugInfo = '🔐 Verifica OTP in corso...';
+      _debugInfo = '🔐 Verifica OTP...';
     });
 
     try {
-      print('🔵 [PHONE_AUTH] Verifica OTP per: $phone');
-      print('🔵 [PHONE_AUTH] Codice OTP: $otp');
+      print('🔵 [LINK_PHONE] Verifica OTP per: $phone');
+      print('🔵 [LINK_PHONE] User ID: ${currentUser.id}');
 
-      // ✅ USA IL METODO NATIVO DI SUPABASE - Non serve Edge Function!
+      // Verifica l'OTP per confermare il nuovo telefono
       final authResponse = await Supabase.instance.client.auth.verifyOTP(
-        type: OtpType.sms,
+        type: OtpType.phoneChange,  // 🔑 Importante: usa phoneChange!
         phone: phone,
         token: otp,
       );
 
-      final currentUser = authResponse.user;
-      final session = authResponse.session;
-
-      if (currentUser == null || session == null) {
-        throw Exception('Verifica fallita: utente o sessione non trovati');
+      if (authResponse.user == null) {
+        throw Exception('Verifica fallita');
       }
 
-      print('🟢 [PHONE_AUTH] Login completato!');
-      print('🟢 [PHONE_AUTH] User ID: ${currentUser.id}');
-      print('🟢 [PHONE_AUTH] Phone: ${currentUser.phone}');
-      print('🟢 [PHONE_AUTH] Session ID: ${session.user.id}');
-      print('🔍 [PHONE_AUTH] Access Token length: ${session.accessToken.length}');
-      print('🔍 [PHONE_AUTH] Refresh Token exists: ${session.refreshToken != null}');
+      print('🟢 [LINK_PHONE] Telefono associato con successo!');
+      print('🟢 [LINK_PHONE] Nuovo phone: ${authResponse.user!.phone}');
 
       setState(() {
         _isLoading = false;
-        _currentSessionId = currentUser.id;
-        _debugInfo = '✅ Login completato! User: ${currentUser.phone}';
+        _debugInfo = '✅ Telefono associato: $phone';
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Login completato!'),
+            content: Text('✅ Telefono associato correttamente!'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
 
-        // Naviga alla home
-        Navigator.of(context).pushReplacementNamed('/home');
+        // 🔧 FIX: Ritorna il numero di telefono invece di true
+        await Future.delayed(const Duration(seconds: 1));
+        Navigator.of(context).pop(phone);  // Ritorna il numero come String
       }
 
     } catch (e, stackTrace) {
-      print('🔴 [PHONE_AUTH] Errore verifica OTP: $e');
-      print('🔴 [PHONE_AUTH] Stack trace: $stackTrace');
+      print('🔴 [LINK_PHONE] Errore verifica OTP: $e');
+      print('🔴 [LINK_PHONE] Stack trace: $stackTrace');
       
       setState(() {
         _isLoading = false;
         _debugInfo = '❌ Errore: $e';
       });
 
-      // Mostra un messaggio più user-friendly
       String errorMessage = 'Errore verifica OTP';
       if (e.toString().contains('invalid') || e.toString().contains('expired')) {
         errorMessage = 'Codice OTP non valido o scaduto';
-      } else if (e.toString().contains('too many requests')) {
-        errorMessage = 'Troppi tentativi. Riprova più tardi';
+      } else if (e.toString().contains('already registered')) {
+        errorMessage = 'Questo numero è già registrato';
       }
 
       _showError(errorMessage);
     }
   }
 
-  // 🐛 Controlla sessione corrente
+  // 🐛 Debug: controlla sessione
   Future<void> _checkCurrentSession() async {
     try {
       final session = Supabase.instance.client.auth.currentSession;
       final user = Supabase.instance.client.auth.currentUser;
 
-      print('🔍 [DEBUG] Sessione corrente:');
+      print('🔍 [DEBUG_LINK] Sessione corrente:');
       print('  - Session exists: ${session != null}');
       print('  - User exists: ${user != null}');
       if (user != null) {
@@ -173,22 +220,15 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         print('  - Phone: ${user.phone}');
         print('  - Email: ${user.email}');
       }
-      if (session != null) {
-        print('  - Access Token: ${session.accessToken.substring(0, 20)}...');
-        print('  - Refresh Token exists: ${session.refreshToken != null}');
-        if (session.refreshToken != null) {
-          print('  - Refresh Token: ${session.refreshToken!.substring(0, 20)}...');
-        }
-      }
 
       setState(() {
         _debugInfo = user != null 
-          ? '👤 User: ${user.phone ?? user.email ?? user.id}\n🔑 Session: ${session != null ? "Active" : "None"}'
+          ? '👤 User: ${user.email ?? user.id}\n📱 Phone: ${user.phone ?? "Non associato"}'
           : '❌ Nessuna sessione attiva';
       });
 
     } catch (e) {
-      print('🔴 [DEBUG] Errore controllo sessione: $e');
+      print('🔴 [DEBUG_LINK] Errore: $e');
       setState(() {
         _debugInfo = '❌ Errore: $e';
       });
@@ -206,11 +246,53 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     }
   }
 
+  // Dialog quando il numero è già registrato
+  void _showPhoneExistsDialog(String phone) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Numero già registrato'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Il numero $phone è già associato ad un altro account.'),
+            const SizedBox(height: 16),
+            const Text(
+              'Cosa puoi fare:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• Usa un numero diverso'),
+            const SizedBox(height: 4),
+            const Text('• Se è il tuo numero, accedi con quell\'account'),
+            const SizedBox(height: 4),
+            const Text('• Contatta il supporto per assistenza'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login con Telefono'),
+        title: const Text('Associa Telefono'),
         actions: [
           IconButton(
             icon: Icon(_debugMode ? Icons.bug_report : Icons.bug_report_outlined),
@@ -232,15 +314,23 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
               
               const Icon(
-                Icons.phone_android,
-                size: 80,
+                Icons.link,
+                size: 60,
                 color: Colors.blue,
               ),
               
-              const SizedBox(height: 40),
+              const SizedBox(height: 16),
+              
+              const Text(
+                'Associa un numero di telefono al tuo account per una maggiore sicurezza',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+              
+              const SizedBox(height: 32),
               
               // Campo telefono
               TextField(
@@ -289,7 +379,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        _otpSent ? 'Verifica Codice' : 'Invia Codice OTP',
+                        _otpSent ? 'Verifica e Associa' : 'Invia Codice OTP',
                         style: const TextStyle(fontSize: 16),
                       ),
               ),
@@ -343,10 +433,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                           style: const TextStyle(fontSize: 11),
                         ),
                       ],
-                      if (_currentSessionId != null) ...[
+                      if (_originalUserId != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          '🔑 Session: ${_currentSessionId!.substring(0, 8)}...',
+                          '🔐 User: ${_originalUserId!.substring(0, 8)}...',
                           style: const TextStyle(fontSize: 11),
                         ),
                       ],

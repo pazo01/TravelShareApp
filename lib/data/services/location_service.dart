@@ -58,6 +58,14 @@ class LocationService {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 10),
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          throw LocationServiceException(
+            'Timeout GPS',
+            'Impossibile ottenere la posizione entro il tempo limite. Riprova o verifica che il GPS sia attivo.',
+          );
+        },
       );
 
       // Aggiorna cache

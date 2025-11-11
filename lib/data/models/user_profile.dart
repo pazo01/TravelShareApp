@@ -3,6 +3,7 @@ class UserProfile {
   final String? email;
   final String? phone;
   final String? googleId;
+  final bool? phoneVerified;
   final String? fullName;
   final String? avatarUrl;
   final double reputationScore;
@@ -15,6 +16,7 @@ class UserProfile {
     this.email,
     this.phone,
     this.googleId,
+    this.phoneVerified,
     this.fullName,
     this.avatarUrl,
     required this.reputationScore,
@@ -29,6 +31,7 @@ class UserProfile {
       email: json['email'],
       phone: json['phone'],
       googleId: json['google_id'],
+      phoneVerified: json['phone_verified'],
       fullName: json['full_name'],
       avatarUrl: json['avatar_url'],
       reputationScore: (json['reputation_score'] ?? 5.0).toDouble(),

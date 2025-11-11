@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
+import 'phone_password_recovery_screen.dart';
 
 class PasswordRecoveryScreen extends StatefulWidget {
   final String? email;
@@ -15,6 +16,9 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
   bool _emailSent = false;
+  
+  // Nuovo: per tracciare il metodo di recupero selezionato
+  String _recoveryMethod = 'email'; // 'email' o 'phone'
 
   @override
   void initState() {
@@ -62,64 +66,220 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Inserisci la tua email e ti invieremo le istruzioni per reimpostare la password',
+            'Scegli come vuoi recuperare la tua password',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
+          
           const SizedBox(height: 40),
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              prefixIcon: const Icon(Icons.email_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+          
+          // Selezione metodo di recupero
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Inserisci la tua email';
-              }
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                  .hasMatch(value)) {
-                return 'Email non valida';
-              }
-              return null;
-            },
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildMethodButton(
+                    icon: Icons.email_outlined,
+                    label: 'Email',
+                    isSelected: _recoveryMethod == 'email',
+                    onTap: () {
+                      setState(() => _recoveryMethod = 'email');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildMethodButton(
+                    icon: Icons.phone_android,
+                    label: 'Telefono',
+                    isSelected: _recoveryMethod == 'phone',
+                    onTap: () {
+                      setState(() => _recoveryMethod = 'phone');
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _handleSubmit,
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
+          
+          const SizedBox(height: 32),
+          
+          // Campo Email (solo se metodo email selezionato)
+          if (_recoveryMethod == 'email') ...[
+            Text(
+              'Inserisci la tua email e ti invieremo le istruzioni per reimpostare la password',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email_outlined),
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Invia Email',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Inserisci la tua email';
+                }
+                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                    .hasMatch(value)) {
+                  return 'Email non valida';
+                }
+                return null;
+              },
             ),
-          ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleSubmit,
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Invia Email',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+          
+          // Pulsante per recupero tramite telefono
+          if (_recoveryMethod == 'phone') ...[
+            Text(
+              'Usa il tuo numero di telefono associato per recuperare la password tramite OTP',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.phone_android,
+                    size: 48,
+                    color: Colors.blue.shade700,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Riceverai un codice OTP al numero di telefono associato al tuo account',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue.shade900,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: _navigateToPhoneRecovery,
+                icon: const Icon(Icons.phone_android),
+                label: const Text(
+                  'Recupera con Telefono',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildMethodButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -181,6 +341,15 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
     );
   }
 
+  void _navigateToPhoneRecovery() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PhonePasswordRecoveryScreen(),
+      ),
+    );
+  }
+
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -216,4 +385,4 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
     _emailController.dispose();
     super.dispose();
   }
-} 
+}

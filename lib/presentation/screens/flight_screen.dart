@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../data/services/flight_service.dart';
+import '../../data/services/trip_service.dart';
 import '../../core/config/supabase_config.dart';
 import 'destination_picker_screen.dart';
+import 'home_screen.dart';
 
 class FlightScreen extends StatefulWidget {
   const FlightScreen({super.key});
@@ -15,6 +17,7 @@ class FlightScreen extends StatefulWidget {
 class _FlightScreenState extends State<FlightScreen> {
   final _flightNumberController = TextEditingController();
   final _flightService = FlightService();
+  final _tripService = TripService();
   
   DateTime? _selectedDate;
   Map<String, dynamic>? _flightData;
@@ -198,10 +201,14 @@ class _FlightScreenState extends State<FlightScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${_flightInfo!.airline} • ${_flightInfo!.flightNumber}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Flexible(
+                  child: Text(
+                    '${_flightInfo!.airline} • ${_flightInfo!.flightNumber}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Chip(
                   label: Text(_flightInfo!.statusDisplay),
                   backgroundColor: _getStatusColor(),
@@ -251,29 +258,33 @@ class _FlightScreenState extends State<FlightScreen> {
             
             // Arrival time
             if (_flightInfo!.scheduledArrival != null) ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Arrivo previsto:', style: TextStyle(color: Colors.grey.shade600)),
-                  Text(
-                    DateFormat('HH:mm').format(_flightInfo!.scheduledArrival!),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.access_time, color: Colors.orange),
+                title: const Text('Arrivo previsto'),
+                subtitle: Text(
+                  DateFormat('dd/MM/yyyy HH:mm').format(_flightInfo!.scheduledArrival!),
+                ),
+                dense: true,
               ),
             ],
             
-            // Gate/Terminal
+            // Terminal and Gate info
             if (_flightInfo!.terminal != null || _flightInfo!.gate != null) ...[
-              const SizedBox(height: 8),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (_flightInfo!.terminal != null)
-                    Text('Terminal: ${_flightInfo!.terminal}'),
+                  if (_flightInfo!.terminal != null) ...[
+                    Chip(
+                      avatar: const Icon(Icons.domain, size: 16),
+                      label: Text('Terminal ${_flightInfo!.terminal}'),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (_flightInfo!.gate != null)
-                    Text('Gate: ${_flightInfo!.gate}'),
+                    Chip(
+                      avatar: const Icon(Icons.door_front_door, size: 16),
+                      label: Text('Gate ${_flightInfo!.gate}'),
+                    ),
                 ],
               ),
             ],
@@ -288,18 +299,15 @@ class _FlightScreenState extends State<FlightScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_selectedDestination == null) ...[
-          const Icon(Icons.location_on, size: 80, color: Colors.grey),
-          const SizedBox(height: 16),
           const Text(
             'Dove devi andare dopo l\'atterraggio?',
-            style: TextStyle(fontSize: 18),
-            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _selectDestination,
-            icon: const Icon(Icons.map),
-            label: const Text('Seleziona sulla Mappa'),
+            icon: const Icon(Icons.location_on),
+            label: const Text('Seleziona Destinazione'),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.all(16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -376,9 +384,15 @@ class _FlightScreenState extends State<FlightScreen> {
         const SizedBox(height: 24),
         
         ElevatedButton.icon(
-          onPressed: _createTrip,
-          icon: const Icon(Icons.check_circle),
-          label: const Text('Crea Viaggio e Trova Compagni'),
+          onPressed: _isLoading ? null : _createTrip,
+          icon: _isLoading 
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.check_circle),
+          label: Text(_isLoading ? 'Salvataggio...' : 'Crea Viaggio e Trova Compagni'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
@@ -503,22 +517,128 @@ class _FlightScreenState extends State<FlightScreen> {
   }
 
   Future<void> _createTrip() async {
-    // TODO: Implementare salvataggio nel database (Giorno 2-3)
-    _showSuccess('Viaggio creato! Implementazione database in arrivo...');
-    
-    // Per ora, torna alla home
-    Navigator.pop(context);
+    if (_flightInfo == null || _selectedDestination == null) {
+      _showError('Dati mancanti. Ricontrolla il volo e la destinazione.');
+      return;
+    }
+
+    try {
+      setState(() => _isLoading = true);
+      
+      // Salva il viaggio nel database
+      final trip = await _tripService.createTrip(
+        flightNumber: _flightInfo!.flightNumber,
+        airline: _flightInfo!.airline,
+        departureAirport: _flightInfo!.departureAirport,
+        arrivalAirport: _flightInfo!.arrivalAirport,
+        scheduledArrival: _flightInfo!.scheduledArrival,
+        destinationAddress: _selectedDestination!['address'] ?? 'Posizione personalizzata',
+        destinationLat: _selectedDestination!['lat'] ?? 0.0,
+        destinationLng: _selectedDestination!['lng'] ?? 0.0,
+        status: _flightInfo!.status,
+        additionalFlightData: _flightData,
+      );
+      
+      if (!mounted) return;
+      
+      // Mostra dialog di successo
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 32),
+                SizedBox(width: 12),
+                Text('Viaggio Creato!'),
+              ],
+            ),
+            content: const Text(
+              'Il tuo viaggio è stato salvato con successo.\n\n'
+              'Ora stiamo cercando compagni di viaggio che condividono il tuo stesso volo e una destinazione simile.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(); // Chiude il dialog
+                  // Naviga alla HomeScreen nella tab "I miei viaggi" (indice 1)
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (context) => const HomeScreen(initialIndex: 1),
+                    ),
+                    (route) => false,
+                  );
+                },
+                child: const Text('Vai ai miei viaggi'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(); // Chiude il dialog
+                  _resetForm();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                ),
+                child: const Text('Crea un altro viaggio'),
+              ),
+            ],
+          );
+        },
+      );
+      
+      setState(() => _isLoading = false);
+      
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showError('Errore nel salvataggio: ${e.toString()}');
+    }
+  }
+
+  void _resetForm() {
+    setState(() {
+      _flightNumberController.clear();
+      _selectedDate = null;
+      _flightData = null;
+      _flightInfo = null;
+      _selectedDestination = null;
+      _errorMessage = null;
+      _currentStep = 0;
+    });
+    _showSuccess('Pronto per creare un nuovo viaggio!');
   }
 
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 

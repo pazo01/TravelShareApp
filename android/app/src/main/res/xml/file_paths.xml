@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+    File: android/app/src/main/res/xml/file_paths.xml
+    
+    Questo file definisce i percorsi accessibili dal FileProvider.
+    È necessario per image_picker su Android 11+
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache directory - per file temporanei -->
+    <cache-path name="cache" path="." />
+    
+    <!-- External cache - per foto temporanee -->
+    <external-cache-path name="external_cache" path="." />
+    
+    <!-- External files - se necessario -->
+    <external-files-path name="external_files" path="." />
+    
+    <!-- External path - per alcune versioni Android -->
+    <external-path name="external" path="." />
+</paths>
