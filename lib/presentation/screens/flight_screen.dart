@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../data/services/flight_service.dart';
 import '../../data/services/trip_service.dart';
+import '../../data/services/matching_service.dart';
+import '../../data/services/group_service.dart';
 import '../../core/config/supabase_config.dart';
 import 'destination_picker_screen.dart';
 import 'home_screen.dart';
@@ -524,7 +526,7 @@ class _FlightScreenState extends State<FlightScreen> {
 
     try {
       setState(() => _isLoading = true);
-      
+
       // Salva il viaggio nel database
       final trip = await _tripService.createTrip(
         flightNumber: _flightInfo!.flightNumber,
@@ -538,8 +540,40 @@ class _FlightScreenState extends State<FlightScreen> {
         status: _flightInfo!.status,
         additionalFlightData: _flightData,
       );
-      
+
       if (!mounted) return;
+
+      // 🔥 MATCHING AUTOMATICO - cerca altri viaggiatori compatibili
+      print('🔍 Avvio matching per trip ${trip['id']}...');
+      try {
+        final user = SupabaseConfig.client.auth.currentUser;
+        if (user != null) {
+          final matchResponse = await MatchingService.findCompatibleTrips(
+            userId: user.id,
+            arrivalAirport: _flightInfo!.arrivalAirport,
+            scheduledArrival: _flightInfo!.scheduledArrival,
+          );
+
+          if (matchResponse.isNotEmpty) {
+            print('✅ Trovati ${matchResponse.length} match compatibili!');
+
+            // Crea o unisciti a un gruppo
+            final currentTrip = {
+              'trip_id': trip['id'],
+              'user_id': user.id,
+            };
+            final allTrips = [...matchResponse, currentTrip];
+
+            await GroupService.createOrJoinGroup(matchedTrips: allTrips);
+            print('🎉 Gruppo creato/aggiornato con successo!');
+          } else {
+            print('ℹ️ Nessun match trovato al momento. Il viaggio resta in attesa.');
+          }
+        }
+      } catch (matchError) {
+        print('⚠️ Errore durante matching (non bloccante): $matchError');
+        // Non blocchiamo il flusso se il matching fallisce
+      }
       
       // Mostra dialog di successo
       await showDialog(
