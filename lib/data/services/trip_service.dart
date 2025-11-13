@@ -65,7 +65,7 @@ class TripService {
     }
   }
 
-  /// Crea o recupera un volo esistente
+  /// Crea o recupera un volo esistente usando UPSERT (atomico)
   Future<Map<String, dynamic>?> _createOrGetFlight({
     required String flightNumber,
     required String airline,
@@ -75,32 +75,19 @@ class TripService {
     required String status,
   }) async {
     try {
-      // Prima verifica se il volo esiste già
-      final existingFlight = await _client
-          .from('flights')
-          .select()
-          .eq('flight_number', flightNumber)
-          .eq('departure_airport', departureAirport)
-          .eq('arrival_airport', arrivalAirport)
-          .maybeSingle();
-
-      if (existingFlight != null) {
-        print('🔄 Volo esistente trovato: ${existingFlight['id']}');
-        return existingFlight;
-      }
-
-      // Altrimenti crea un nuovo volo
-      final newFlight = await _client.from('flights').insert({
+      // Usa UPSERT: inserisce se non esiste, aggiorna se esiste
+      // Questo evita race condition e l'errore "multiple rows"
+      final flightData = await _client.from('flights').upsert({
         'flight_number': flightNumber,
         'airline': airline,
         'departure_airport': departureAirport,
         'arrival_airport': arrivalAirport,
         'scheduled_arrival': scheduledArrival?.toIso8601String(),
         'status': status,
-      }).select().single();
+      }).select('id').single();
 
-      print('✈️ Nuovo volo creato: ${newFlight['id']}');
-      return newFlight;
+      print('✈️ Volo gestito (upsert): ${flightData['id']}');
+      return flightData;
 
     } catch (e) {
       print('❌ Errore gestione volo: $e');

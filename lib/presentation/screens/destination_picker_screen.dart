@@ -114,7 +114,8 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
 
   /// Ricerca suggerimenti da Photon/Nominatim
   Future<void> _fetchSuggestions(String query) async {
-    if (query.isEmpty || query.length < 3) {
+    // Mostra suggerimenti da subito (anche con 1 carattere)
+    if (query.isEmpty) {
       setState(() => _suggestions = []);
       return;
     }
