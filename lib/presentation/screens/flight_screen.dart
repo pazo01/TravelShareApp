@@ -544,14 +544,19 @@ class _FlightScreenState extends State<FlightScreen> {
       if (!mounted) return;
 
       // 🔥 MATCHING AUTOMATICO - cerca altri viaggiatori compatibili
-      print('🔍 Avvio matching per trip ${trip['id']}...');
+      final tripId = trip?['id'];
+      print('🔍 Avvio matching per trip $tripId...');
+
       try {
         final user = SupabaseConfig.client.auth.currentUser;
-        if (user != null) {
+        final scheduledArrival = _flightInfo!.scheduledArrival;
+
+        // Verifica che abbiamo tutti i dati necessari per il matching
+        if (user != null && scheduledArrival != null && tripId != null) {
           final matchResponse = await MatchingService.findCompatibleTrips(
             userId: user.id,
             arrivalAirport: _flightInfo!.arrivalAirport,
-            scheduledArrival: _flightInfo!.scheduledArrival,
+            scheduledArrival: scheduledArrival,
           );
 
           if (matchResponse.isNotEmpty) {
@@ -559,7 +564,7 @@ class _FlightScreenState extends State<FlightScreen> {
 
             // Crea o unisciti a un gruppo
             final currentTrip = {
-              'trip_id': trip['id'],
+              'trip_id': tripId,
               'user_id': user.id,
             };
             final allTrips = [...matchResponse, currentTrip];
@@ -569,6 +574,8 @@ class _FlightScreenState extends State<FlightScreen> {
           } else {
             print('ℹ️ Nessun match trovato al momento. Il viaggio resta in attesa.');
           }
+        } else {
+          print('⚠️ Dati mancanti per matching (user: ${user != null}, scheduledArrival: ${scheduledArrival != null}, tripId: ${tripId != null})');
         }
       } catch (matchError) {
         print('⚠️ Errore durante matching (non bloccante): $matchError');
