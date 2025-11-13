@@ -12,33 +12,29 @@ dependencies:
 
   # UI/UX
   cupertino_icons: ^1.0.8
-  
+
   # Backend & Auth
   supabase_flutter: ^2.10.0
   google_sign_in: ^7.1.1
-  
+
   # State Management
   flutter_riverpod: ^2.6.1
-  
+
   # Network & API
   http: ^1.2.0
-  
-  # Mappe & Geolocalizzazione (GIORNO 7)
-  flutter_map: ^6.1.0
+
+  # Mappe & Geolocalizzazione - Versioni aggiornate dal merge
+  flutter_map: ^7.0.2
   latlong2: ^0.9.0
-  geolocator: ^11.0.0
+  geolocator: ^12.0.0
   geocoding: ^3.0.0
+
+  # Utilities
   image_picker: ^1.2.0
   qr_flutter: ^4.1.0
-  
-  # Future dependencies (per i prossimi giorni)
-   
-# Per formattazione date/ore
-intl: ^0.19.0  
-cached_network_image: ^3.3.1  # Per cache immagini profilo
-flutter_rating_bar: ^4.0.1  # Per sistema recensioni (Giorno 12)
-image_picker: ^1.0.7  # Per selezione immagini 
-
+  intl: ^0.19.0
+  cached_network_image: ^3.3.1
+  flutter_rating_bar: ^4.0.1
 
 dev_dependencies:
   flutter_test:
@@ -47,11 +43,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-
-
-  
-
 
 # assets:
   #   - assets/images/

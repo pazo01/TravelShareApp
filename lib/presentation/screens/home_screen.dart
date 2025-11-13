@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/services/auth_service.dart';
 import 'auth_screen.dart';
+import 'search_screen.dart';  // 🆕 Dal branch campos
 import 'flight_screen.dart';
 import 'my_trips_screen.dart';
 import 'chat_screen.dart';
@@ -10,7 +11,7 @@ import 'profile_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final int initialIndex;
-  
+
   const HomeScreen({super.key, this.initialIndex = 0});
 
   @override
@@ -21,13 +22,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late int _selectedIndex;
 
   final List<Widget> _pages = [
-    const FlightScreen(),
-    const MyTripsScreen(),
-    const ChatScreen(),
-    const ProfileScreen(),
+    const SearchScreen(),      // 🆕 Ricerca Viaggi (dal branch campos)
+    const FlightScreen(),      // Nuovo Viaggio
+    const MyTripsScreen(),     // I miei viaggi
+    const ChatScreen(),        // Chat
+    const ProfileScreen(),     // Profilo
   ];
 
   final List<NavigationDestination> _destinations = const [
+    NavigationDestination(
+      icon: Icon(Icons.search),
+      selectedIcon: Icon(Icons.search, size: 28),
+      label: 'Cerca',
+    ),
     NavigationDestination(
       icon: Icon(Icons.flight_takeoff),
       selectedIcon: Icon(Icons.flight_takeoff, size: 28),
