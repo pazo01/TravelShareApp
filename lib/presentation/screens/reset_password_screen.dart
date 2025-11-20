@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
+import '../../data/services/mfa_service.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -12,10 +13,47 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _mfaCodeController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
+  bool _hasMfa = false;
+  bool _mfaVerified = false;
+  String? _factorId;
+  String? _challengeId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMfaStatus();
+  }
+
+  Future<void> _checkMfaStatus() async {
+    final hasMfa = await MfaService.isMfaEnabled();
+    if (mounted) {
+      setState(() => _hasMfa = hasMfa);
+      if (_hasMfa) {
+        _createMfaChallenge();
+      }
+    }
+  }
+
+  Future<void> _createMfaChallenge() async {
+    try {
+      final factors = await MfaService.listFactors();
+      if (factors.isNotEmpty) {
+        final factor = factors.first;
+        final challenge = await MfaService.createChallenge(factor.id);
+        setState(() {
+          _factorId = factor.id;
+          _challengeId = challenge.id;
+        });
+      }
+    } catch (e) {
+      print('❌ Errore creazione challenge MFA: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +168,55 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                 const SizedBox(height: 24),
 
+                // Campo MFA se è abilitato
+                if (_hasMfa && !_mfaVerified) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.security, color: Colors.orange.shade700),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Il tuo account ha il 2FA attivo. Inserisci il codice dalla tua app authenticator.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.orange.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _mfaCodeController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: InputDecoration(
+                      labelText: 'Codice 2FA',
+                      hintText: '123456',
+                      prefixIcon: const Icon(Icons.pin),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      counterText: '',
+                    ),
+                    validator: (value) {
+                      if (_hasMfa && (value == null || value.length != 6)) {
+                        return 'Inserisci il codice a 6 cifre';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
                 // Password requirements
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -223,10 +310,29 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Aggiorna la password
+      // STEP 1: Se ha MFA, verifica il codice prima
+      if (_hasMfa && !_mfaVerified) {
+        if (_factorId == null || _challengeId == null) {
+          _showError('Errore nel sistema MFA. Riprova.');
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        // Verifica il codice MFA per ottenere sessione AAL2
+        await MfaService.verifyMfaCode(
+          factorId: _factorId!,
+          challengeId: _challengeId!,
+          code: _mfaCodeController.text,
+        );
+
+        setState(() => _mfaVerified = true);
+        print('✅ MFA verificato, ora posso aggiornare la password');
+      }
+
+      // STEP 2: Aggiorna la password (ora con sessione AAL2 se necessario)
       await AuthService.updatePassword(_newPasswordController.text);
 
-      // 2. LOGOUT FORZATO - importante per utenti con MFA!
+      // STEP 3: LOGOUT FORZATO - importante per utenti con MFA!
       // Il token di recovery bypassa MFA, quindi forziamo logout
       // Così l'utente deve rifare login e inserire il codice MFA
       await AuthService.signOut();
@@ -243,7 +349,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         }
       }
     } catch (e) {
-      _showError('Errore: ${e.toString()}');
+      if (e.toString().contains('Invalid TOTP')) {
+        _showError('Codice 2FA non valido. Riprova.');
+      } else {
+        _showError('Errore: ${e.toString()}');
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -273,6 +383,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   void dispose() {
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _mfaCodeController.dispose();
     super.dispose();
   }
 }

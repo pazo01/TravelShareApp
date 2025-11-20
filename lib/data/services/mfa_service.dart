@@ -238,4 +238,20 @@ class MfaService {
       // Non rilanciare l'eccezione - è solo una pulizia
     }
   }
+
+  /// Ottiene la lista di tutti i fattori MFA verificati
+  static Future<List<Factor>> listFactors() async {
+    try {
+      final factorsResponse = await _supabase.auth.mfa.listFactors();
+      final totpFactors = factorsResponse.totp ?? [];
+
+      // Restituisce solo i fattori verificati
+      return totpFactors
+          .where((factor) => factor.status == FactorStatus.verified)
+          .toList();
+    } catch (e) {
+      print('🔴 Errore recupero fattori: $e');
+      return [];
+    }
+  }
 }
