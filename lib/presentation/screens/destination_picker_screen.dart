@@ -134,14 +134,25 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
     });
     print('📊 State updated: _isLoading=true, _showSuggestions=true');
 
+    // Usa Nominatim invece di Photon (più affidabile)
     final url = Uri.parse(
-      'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&lang=it&limit=8'
+      'https://nominatim.openstreetmap.org/search?'
+      'q=${Uri.encodeComponent(query)}&'
+      'format=json&'
+      'addressdetails=1&'
+      'limit=8&'
+      'accept-language=it'
     );
     print('🌐 URL: $url');
 
     try {
-      print('🔍 Fetching from Photon API...');
-      final response = await http.get(url).timeout(
+      print('🔍 Fetching from Nominatim API...');
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'TravelShareApp/1.0', // Nominatim richiede User-Agent
+        },
+      ).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
           print('❌ TIMEOUT after 5 seconds!');
@@ -153,40 +164,50 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
 
       if (response.statusCode == 200) {
         print('✅ HTTP 200 OK');
-        final data = jsonDecode(response.body);
-        final features = data['features'] as List<dynamic>;
+        final results = jsonDecode(response.body) as List<dynamic>;
 
-        print('📍 Found ${features.length} raw results from API');
+        print('📍 Found ${results.length} raw results from API');
 
         if (mounted) {
-          final processedSuggestions = features
-              .map((f) {
-                final props = f['properties'];
-                final display = _formatSuggestionDisplay(props);
+          final processedSuggestions = results
+              .map((result) {
+                final displayName = result['display_name'] ?? '';
+                final address = result['address'] ?? {};
+
+                // Estrai componenti dell'indirizzo
+                final name = result['name'] ?? '';
+                final road = address['road'] ?? '';
+                final city = address['city'] ??
+                             address['town'] ??
+                             address['village'] ?? '';
+                final state = address['state'] ?? '';
+                final country = address['country'] ?? '';
 
                 // Debug dettagliato
-                print('  📌 Result: name="${props['name'] ?? ''}", '
-                    'street="${props['street'] ?? ''}", '
-                    'city="${props['city'] ?? ''}", '
-                    'display="$display"');
+                print('  📌 Result: name="$name", '
+                    'road="$road", '
+                    'city="$city", '
+                    'displayName="$displayName"');
 
                 return {
-                  'name': props['name'] ?? '',
-                  'street': props['street'] ?? '',
-                  'city': props['city'] ?? '',
-                  'state': props['state'] ?? '',
-                  'country': props['country'] ?? '',
-                  'lat': f['geometry']['coordinates'][1],
-                  'lon': f['geometry']['coordinates'][0],
-                  'display': display,
+                  'name': name,
+                  'street': road,
+                  'city': city,
+                  'state': state,
+                  'country': country,
+                  'lat': double.parse(result['lat'].toString()),
+                  'lon': double.parse(result['lon'].toString()),
+                  'display': displayName,
                 };
               })
               .toList();
 
-          print('🔧 Processed ${processedSuggestions.length} items BEFORE filtering');
+          print('🔧 Processed ${processedSuggestions.length} items');
 
-          // RIMUOVO IL FILTRO PER DEBUG
-          final filteredSuggestions = processedSuggestions.take(8).toList();
+          final filteredSuggestions = processedSuggestions
+              .where((item) => (item['display'] as String).isNotEmpty)
+              .take(8)
+              .toList();
 
           print('✅✅✅ Final suggestions count: ${filteredSuggestions.length}');
 
