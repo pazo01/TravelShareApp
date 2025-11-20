@@ -35,6 +35,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   }
 
   /// Ottiene posizione corrente all'apertura
+  /// NON riempie il campo di ricerca - lascia che l'utente digiti liberamente
   Future<void> _getCurrentLocation() async {
     try {
       final position = await _locationService.getCurrentPosition();
@@ -42,10 +43,8 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
         final point = LatLng(position.latitude, position.longitude);
         if (mounted) {
           _mapController.move(point, 15);
-          setState(() {
-            _selectedPoint = point;
-          });
-          _getAddressFromLatLng(point);
+          // NON impostiamo _selectedPoint né chiamiamo _getAddressFromLatLng
+          // Lasciamo il campo di ricerca vuoto per permettere all'utente di digitare
         }
       }
     } on LocationServiceException catch (e) {
@@ -287,7 +286,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
                       _fetchSuggestions(value);
                     },
                     decoration: InputDecoration(
-                      hintText: "Cerca indirizzo, hotel, zona...",
+                      hintText: "Digita la tua destinazione...",
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: _isLoading
                           ? const Padding(
@@ -480,10 +479,11 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
         title: const Text('Come funziona'),
         content: const SingleChildScrollView(
           child: Text(
-            '1. Cerca un indirizzo usando la barra di ricerca\n\n'
-            '2. Oppure tocca direttamente sulla mappa\n\n'
-            '3. Usa il pulsante GPS per la tua posizione attuale\n\n'
-            '4. Conferma la destinazione selezionata\n\n'
+            '1. Digita il tuo indirizzo di destinazione nella barra di ricerca\n\n'
+            '2. Vedrai suggerimenti in tempo reale dalla mappa mentre scrivi\n\n'
+            '3. Seleziona un suggerimento o tocca direttamente sulla mappa\n\n'
+            '4. Puoi anche usare il pulsante GPS per la tua posizione attuale\n\n'
+            '5. Conferma la destinazione selezionata\n\n'
             'Prossimamente: potrai impostare un raggio flessibile '
             'per aumentare le possibilità di trovare compagni di viaggio!',
           ),
