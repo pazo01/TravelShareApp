@@ -282,8 +282,16 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: TextField(
                     controller: _searchController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
                     onChanged: (value) {
                       _fetchSuggestions(value);
+                    },
+                    onSubmitted: (value) {
+                      // Quando l'utente preme Invio, seleziona il primo suggerimento
+                      if (_suggestions.isNotEmpty) {
+                        _selectSuggestion(_suggestions.first);
+                      }
                     },
                     decoration: InputDecoration(
                       hintText: "Digita la tua destinazione...",
