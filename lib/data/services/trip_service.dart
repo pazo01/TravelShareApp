@@ -9,7 +9,9 @@ class TripService {
 
   final SupabaseClient _client = SupabaseConfig.client;
 
-  /// Crea un nuovo viaggio nel database
+  /// ---------------------------------------------------------------------------
+  /// CREA UN NUOVO VIAGGIO
+  /// ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> createTrip({
     required String flightNumber,
     required String airline,
@@ -20,7 +22,7 @@ class TripService {
     required double destinationLat,
     required double destinationLng,
     String? status,
-    Map<String, dynamic>? additionalFlightData,
+    Map<String, dynamic>? additionalFlightData,   // ✅ RESTORED
   }) async {
     try {
       final userId = _client.auth.currentUser?.id;
@@ -28,7 +30,7 @@ class TripService {
         throw Exception('Utente non autenticato');
       }
 
-      // 1. Prima crea o recupera il volo
+      // 1️⃣ CREA O RECUPERA IL VOLO
       final flightData = await _createOrGetFlight(
         flightNumber: flightNumber,
         airline: airline,
@@ -42,19 +44,24 @@ class TripService {
         throw Exception('Impossibile creare il volo');
       }
 
-      final flightId = flightData['id'];
-
-      // 2. Crea il viaggio
-      final tripData = await _client.from('trips').insert({
-        'user_id': userId,
-        'flight_id': flightId,
-        'destination_address': destinationAddress,
-        'destination_lat': destinationLat,
-        'destination_lng': destinationLng,
-        'status': 'looking_for_match',
-        'flexible_zone_radius': 1000, // Default 1km
-        'max_detour_time': 15, // Default 15 minuti
-      }).select().single();
+      // 2️⃣ CREA IL VIAGGIO
+      final tripData = await _client
+          .from('trips')
+          .insert({
+            'user_id': userId,
+            'flight_id': flightData['id'],
+            'destination_address': destinationAddress,
+            'destination_lat': destinationLat,
+            'destination_lng': destinationLng,
+            'status': 'looking_for_match',
+            'flexible_zone_radius': 1000,
+            'max_detour_time': 15,
+            'notes': additionalFlightData != null
+                ? additionalFlightData.toString()
+                : null,
+          })
+          .select()
+          .single();
 
       print('✅ Viaggio creato con successo: ${tripData['id']}');
       return tripData;
@@ -65,7 +72,9 @@ class TripService {
     }
   }
 
-  /// Crea o recupera un volo esistente usando UPSERT (atomico)
+  /// ---------------------------------------------------------------------------
+  /// CREA O RECUPERA IL VOLO (UPSERT)
+  /// ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> _createOrGetFlight({
     required String flightNumber,
     required String airline,
@@ -75,16 +84,18 @@ class TripService {
     required String status,
   }) async {
     try {
-      // Usa UPSERT: inserisce se non esiste, aggiorna se esiste
-      // Questo evita race condition e l'errore "multiple rows"
-      final flightData = await _client.from('flights').upsert({
-        'flight_number': flightNumber,
-        'airline': airline,
-        'departure_airport': departureAirport,
-        'arrival_airport': arrivalAirport,
-        'scheduled_arrival': scheduledArrival?.toIso8601String(),
-        'status': status,
-      }).select('id').single();
+      final flightData = await _client
+          .from('flights')
+          .upsert({
+            'flight_number': flightNumber,
+            'airline': airline,
+            'departure_airport': departureAirport,
+            'arrival_airport': arrivalAirport,
+            'scheduled_arrival': scheduledArrival?.toIso8601String(),
+            'status': status,
+          })
+          .select('id')
+          .single();
 
       print('✈️ Volo gestito (upsert): ${flightData['id']}');
       return flightData;
@@ -95,30 +106,18 @@ class TripService {
     }
   }
 
-  /// Recupera tutti i viaggi dell'utente corrente - VERSIONE SEMPLIFICATA
+  /// ---------------------------------------------------------------------------
+  /// RECUPERA I VIAGGI DELL'UTENTE (NO JOIN CON GROUP_MEMBERS)
+  /// ---------------------------------------------------------------------------
   Future<List<Map<String, dynamic>>> getUserTrips() async {
     try {
       final userId = _client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('Utente non autenticato');
-      }
+      if (userId == null) throw Exception("Utente non autenticato");
 
-      // Query semplificata per evitare ricorsione
       final trips = await _client
           .from('trips')
           .select('''
-            id,
-            user_id,
-            flight_id,
-            destination_address,
-            destination_lat,
-            destination_lng,
-            flexible_zone_radius,
-            max_detour_time,
-            status,
-            notes,
-            created_at,
-            updated_at,
+            *,
             flights:flight_id (
               id,
               flight_number,
@@ -142,41 +141,68 @@ class TripService {
     }
   }
 
-  /// Cancella un viaggio
-  Future<void> deleteTrip(String tripId) async {
+  /// ---------------------------------------------------------------------------
+  /// RECUPERA group_id DAL trip_id  (PER CHAT)
+  /// ---------------------------------------------------------------------------
+    Future<String?> getGroupIdForTrip(String tripId) async {
+    print("🟦 DEBUG → getGroupIdForTrip() called");
+    print("🟦 tripId received: $tripId");
+
     try {
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('Utente non autenticato');
+      final result = await _client
+          .from('group_members')
+          .select('group_id')
+          .eq('trip_id', tripId)
+          .maybeSingle();
+
+      print("🟩 DEBUG → Supabase result: $result");
+
+      if (result == null) {
+        print("🟥 DEBUG → No group_members row found for this trip");
+        return null;
       }
 
-      await _client
-          .from('trips')
-          .delete()
-          .eq('id', tripId)
-          .eq('user_id', userId);
-
-      print('🗑️ Viaggio eliminato: $tripId');
+      print("🟢 DEBUG → Found group_id: ${result['group_id']}");
+      return result['group_id'].toString();
 
     } catch (e) {
-      print('❌ Errore eliminazione viaggio: $e');
-      rethrow;
+      print('❌ DEBUG ERROR getGroupIdForTrip: $e');
+      return null;
     }
   }
 
-  /// Aggiorna lo stato di un viaggio
+
+    /// ---------------------------------------------------------------------------
+    /// CANCELLA UN VIAGGIO
+    /// ---------------------------------------------------------------------------
+    Future<void> deleteTrip(String tripId) async {
+      try {
+        final userId = _client.auth.currentUser?.id;
+        if (userId == null) throw Exception('Utente non autenticato');
+
+        await _client
+            .from('trips')
+            .delete()
+            .eq('id', tripId)
+            .eq('user_id', userId);
+
+        print('🗑️ Viaggio eliminato: $tripId');
+
+      } catch (e) {
+        print('❌ Errore eliminazione viaggio: $e');
+        rethrow;
+      }
+    }
+
+  /// ---------------------------------------------------------------------------
+  /// AGGIORNA STATO VIAGGIO
+  /// ---------------------------------------------------------------------------
   Future<void> updateTripStatus(String tripId, String newStatus) async {
     try {
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('Utente non autenticato');
-      }
-
       await _client
           .from('trips')
           .update({'status': newStatus})
-          .eq('id', tripId)
-          .eq('user_id', userId);
+          .eq('id', tripId);
 
       print('🔄 Stato viaggio aggiornato: $newStatus');
 
@@ -186,69 +212,20 @@ class TripService {
     }
   }
 
-  /// Recupera un singolo viaggio con dettagli base
+  /// ---------------------------------------------------------------------------
+  /// DETTAGLI DI UN VIAGGIO
+  /// ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> getTripDetails(String tripId) async {
     try {
-      final trip = await _client
+      return await _client
           .from('trips')
-          .select('''
-            *,
-            flights:flight_id (*)
-          ''')
+          .select('*, flights:flight_id (*)')
           .eq('id', tripId)
           .maybeSingle();
-
-      return trip;
 
     } catch (e) {
       print('❌ Errore recupero dettagli viaggio: $e');
       return null;
-    }
-  }
-
-  /// Stream per ricevere aggiornamenti in tempo reale sui viaggi
-  Stream<List<Map<String, dynamic>>> getUserTripsStream() {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) {
-      return Stream.value([]);
-    }
-
-    return _client
-        .from('trips')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-  }
-
-  /// Conta i membri del gruppo per un viaggio (query separata)
-  /// Usa una query semplice senza count per compatibilità
-  Future<int> getGroupMembersCount(String tripId) async {
-    try {
-      final members = await _client
-          .from('group_members')
-          .select('id')
-          .eq('trip_id', tripId);
-
-      return members.length;
-    } catch (e) {
-      print('❌ Errore conteggio membri: $e');
-      return 0;
-    }
-  }
-  
-  /// Controlla se ci sono membri del gruppo per un viaggio
-  Future<bool> hasGroupMembers(String tripId) async {
-    try {
-      final members = await _client
-          .from('group_members')
-          .select('id')
-          .eq('trip_id', tripId)
-          .limit(1);
-
-      return members.isNotEmpty;
-    } catch (e) {
-      print('❌ Errore verifica membri: $e');
-      return false;
     }
   }
 }

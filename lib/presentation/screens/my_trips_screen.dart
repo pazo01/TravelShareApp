@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../data/services/trip_service.dart';
-import 'home_screen.dart'; // Importa il tuo HomeScreen esistente
+import 'home_screen.dart';
+import 'chat_screen.dart'; // ✅ IMPORT CHAT SCREEN
 
 class MyTripsScreen extends StatefulWidget {
   const MyTripsScreen({super.key});
@@ -24,7 +25,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   Future<void> _loadTrips() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final trips = await _tripService.getUserTrips();
       print('📱 Viaggi caricati nella UI: ${trips.length}');
@@ -35,8 +36,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     } catch (e) {
       print('❌ Errore caricamento viaggi: $e');
       setState(() => _isLoading = false);
-      
-      // Mostra errore all'utente
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -77,11 +77,10 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Usa Navigator.push direttamente invece di pushNamed
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => const HomeScreen(initialIndex: 0), // Tab "Nuovo Viaggio"
+              builder: (context) => const HomeScreen(initialIndex: 0),
             ),
           );
         },
@@ -110,7 +109,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
-              // Usa Navigator.push invece di pushNamed
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
@@ -130,19 +128,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   }
 
   Widget _buildTripCard(Map<String, dynamic> trip) {
-    // Estrai i dati del volo in modo sicuro
     final flight = trip['flights'] as Map<String, dynamic>?;
-    
-    // Parse dates in modo sicuro
     final scheduledArrival = flight?['scheduled_arrival'] != null
         ? DateTime.tryParse(flight!['scheduled_arrival'].toString())
         : null;
-    
-    final createdAt = trip['created_at'] != null
-        ? DateTime.tryParse(trip['created_at'].toString())
-        : DateTime.now();
 
-    // Status colors and icons
     final statusInfo = _getTripStatusInfo(trip['status']?.toString());
 
     return Card(
@@ -157,7 +147,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with flight info
+              // ---------------------------------------------------------
+              // HEADER ROW + CHAT ICON  💬🔥
+              // ---------------------------------------------------------
               Row(
                 children: [
                   Container(
@@ -169,6 +161,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     child: const Icon(Icons.flight_takeoff, color: Colors.blue),
                   ),
                   const SizedBox(width: 12),
+
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,6 +184,50 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                       ],
                     ),
                   ),
+
+                  // ---------- 💬 CHAT BUTTON ----------
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
+                    tooltip: "Chat gruppo",
+                    onPressed: () async {
+                      final tripId = trip['id'].toString();
+
+                      print("🟦 Chat icon tapped for tripId = $tripId");
+
+                      // 1️⃣ Fetch group ID from Supabase
+                      final groupId = await TripService().getGroupIdForTrip(tripId);
+
+                      print("🟩 Supabase groupId result = $groupId");
+
+                      // 2️⃣ If no group exists → show message
+                      if (groupId == null) {
+                        print("🟥 No group found for this trip in group_members table");
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Nessun gruppo disponibile per questo viaggio"),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      print("🟢 Opening ChatScreen with groupId = $groupId");
+
+                      // 3️⃣ Navigate to ChatScreen
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(
+                            groupId: groupId,
+                            groupName: "Chat Viaggio",
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+
+                  // Existing popup menu
                   PopupMenuButton<String>(
                     onSelected: (value) => _handleTripAction(value, trip),
                     itemBuilder: (context) => [
@@ -218,10 +255,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 12),
-              
-              // Destination
+
+              // Destination row
               Row(
                 children: [
                   Icon(Icons.location_on, size: 18, color: Colors.grey.shade600),
@@ -236,13 +272,12 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 12),
-              
-              // Date and status
+
+              // Date + status
               Row(
                 children: [
-                  // Date
                   if (scheduledArrival != null) ...[
                     Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
                     const SizedBox(width: 4),
@@ -252,8 +287,6 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     ),
                     const SizedBox(width: 16),
                   ],
-                  
-                  // Status chip
                   Chip(
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -318,7 +351,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
 
   void _showTripDetails(Map<String, dynamic> trip) {
     final flight = trip['flights'] as Map<String, dynamic>?;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -353,40 +386,40 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
-                
-                // Flight details
+
                 _buildDetailSection(
                   icon: Icons.flight,
                   title: 'Volo',
-                  content: '${flight?['airline'] ?? ''} ${flight?['flight_number'] ?? 'N/A'}',
-                  subtitle: '${flight?['departure_airport'] ?? 'N/A'} → ${flight?['arrival_airport'] ?? 'N/A'}',
+                  content:
+                      '${flight?['airline'] ?? ''} ${flight?['flight_number'] ?? 'N/A'}',
+                  subtitle:
+                      '${flight?['departure_airport'] ?? 'N/A'} → ${flight?['arrival_airport'] ?? 'N/A'}',
                 ),
-                
-                // Destination details
+
                 _buildDetailSection(
                   icon: Icons.location_on,
                   title: 'Destinazione',
-                  content: trip['destination_address']?.toString() ?? 'Non specificata',
+                  content: trip['destination_address']?.toString() ??
+                      'Non specificata',
                 ),
-                
-                // Flexible zone
+
                 _buildDetailSection(
                   icon: Icons.radar,
                   title: 'Raggio flessibile',
-                  content: '${trip['flexible_zone_radius'] ?? 1000} metri',
-                  subtitle: 'Max deviazione: ${trip['max_detour_time'] ?? 15} minuti',
+                  content:
+                      '${trip['flexible_zone_radius'] ?? 1000} metri',
+                  subtitle:
+                      'Max deviazione: ${trip['max_detour_time'] ?? 15} minuti',
                 ),
-                
-                // Status
+
                 _buildDetailSection(
                   icon: Icons.info_outline,
                   title: 'Stato',
-                  content: _getTripStatusInfo(trip['status']?.toString())['label'] as String,
+                  content: _getTripStatusInfo(
+                      trip['status']?.toString())['label'] as String,
                 ),
-                
+
                 const SizedBox(height: 20),
-                
-                // Action buttons
                 Row(
                   children: [
                     Expanded(
@@ -396,18 +429,24 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           _confirmDelete(trip);
                         },
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        label: const Text('Elimina', style: TextStyle(color: Colors.red)),
+                        label: const Text('Elimina',
+                            style: TextStyle(color: Colors.red)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Chat di gruppo in arrivo...'),
-                              backgroundColor: Colors.blue,
+                          final groupId = trip['group_members']?['group_id'];
+                          if (groupId == null) return;
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                groupId: groupId.toString(),
+                                groupName: "Chat Viaggio",
+                              ),
                             ),
                           );
                         },
@@ -522,8 +561,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   Future<void> _deleteTrip(String tripId) async {
     try {
       await _tripService.deleteTrip(tripId);
-      await _loadTrips(); // Ricarica la lista
-      
+      await _loadTrips();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -5,7 +5,7 @@ import '../../data/services/auth_service.dart';
 import 'auth_screen.dart';
 import 'flight_screen.dart';
 import 'my_trips_screen.dart';
-import 'chat_screen.dart';
+import 'messages_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -23,7 +23,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final List<Widget> _pages = [
     const FlightScreen(),      // Nuovo Viaggio (ora con matching integrato!)
     const MyTripsScreen(),     // I miei viaggi
-    const ChatScreen(),        // Chat
+    const MessagesScreen(),        // Chat
     const ProfileScreen(),     // Profilo
   ];
 
@@ -41,7 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     NavigationDestination(
       icon: Icon(Icons.chat_bubble_outline),
       selectedIcon: Icon(Icons.chat_bubble),
-      label: 'Chat',
+      label: 'Messaggi',
     ),
     NavigationDestination(
       icon: Icon(Icons.person_outline),
