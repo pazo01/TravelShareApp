@@ -223,13 +223,24 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // 1. Aggiorna la password
       await AuthService.updatePassword(_newPasswordController.text);
 
+      // 2. LOGOUT FORZATO - importante per utenti con MFA!
+      // Il token di recovery bypassa MFA, quindi forziamo logout
+      // Così l'utente deve rifare login e inserire il codice MFA
+      await AuthService.signOut();
+
       if (mounted) {
-        _showSuccess('Password aggiornata con successo!');
-        
-        // Ritorna alla schermata di login
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        _showSuccess('Password aggiornata! Accedi con la nuova password.');
+
+        // Piccolo delay per mostrare il messaggio
+        await Future.delayed(const Duration(seconds: 2));
+
+        if (mounted) {
+          // Ritorna alla schermata di login
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       }
     } catch (e) {
       _showError('Errore: ${e.toString()}');
