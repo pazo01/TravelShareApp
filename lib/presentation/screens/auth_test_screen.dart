@@ -12,6 +12,7 @@ class _AuthTestScreenState extends State<AuthTestScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
+  final _otpController = TextEditingController();
 
   String _status = 'Not authenticated';
   bool _loading = false;
@@ -19,7 +20,7 @@ class _AuthTestScreenState extends State<AuthTestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Auth Test - Giorno 2')),
+      appBar: AppBar(title: const Text('Auth Test - With OTP')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -89,13 +90,56 @@ class _AuthTestScreenState extends State<AuthTestScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _loading ? null : _testEmailSignUp,
-                    child: const Text('Sign Up'),
+                    child: const Text('Sign Up (OTP)'),
                   ),
                 ),
               ],
             ),
 
             const SizedBox(height: 20),
+            const Divider(),
+            const Text('OTP Verification:'),
+            const SizedBox(height: 10),
+
+            // OTP field
+            TextField(
+              controller: _otpController,
+              decoration: const InputDecoration(
+                labelText: 'OTP Code (6 digits)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+            ),
+            const SizedBox(height: 10),
+
+            // OTP buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _testVerifyOtp,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                    child: const Text('Verify OTP'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _testResendOtp,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                    ),
+                    child: const Text('Resend OTP'),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+            const Divider(),
 
             // Sign Out
             ElevatedButton(
@@ -187,24 +231,100 @@ class _AuthTestScreenState extends State<AuthTestScreen> {
 
     setState(() {
       _loading = true;
-      _status = 'Testing Email Sign Up...';
+      _status = 'Testing Email Sign Up with OTP...';
     });
 
     try {
-      final response = await AuthService.signUpWithEmail(
+      await AuthService.signUpWithEmailOtp(
         email: _emailController.text,
         password: _passwordController.text,
         fullName: _nameController.text,
       );
       setState(() {
         _status =
-            'Email Sign Up Success!\n'
-            'Check your email for verification.\n'
-            'User: ${response.user?.email}';
+            'OTP Sent! ✅\n'
+            'Check your email for the verification code.\n'
+            'Email: ${_emailController.text}\n'
+            '\n'
+            '📧 Once you receive the code:\n'
+            '1. Enter it in the OTP field below\n'
+            '2. Click "Verify OTP"\n'
+            '3. Then you can sign in normally';
       });
     } catch (e) {
       setState(() {
         _status = 'Email Sign Up Error: $e';
+      });
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _testVerifyOtp() async {
+    if (_emailController.text.isEmpty || _otpController.text.isEmpty) {
+      setState(() => _status = 'Please enter email and OTP code');
+      return;
+    }
+
+    if (_otpController.text.length != 6) {
+      setState(() => _status = 'OTP code must be 6 digits');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _status = 'Verifying OTP...';
+    });
+
+    try {
+      await AuthService.verifyEmailOtp(
+        email: _emailController.text,
+        token: _otpController.text,
+      );
+      setState(() {
+        _status =
+            'OTP Verified! ✅\n'
+            'Registration completed!\n'
+            '\n'
+            'You can now sign in with:\n'
+            'Email: ${_emailController.text}\n'
+            'Password: (the one you entered)\n'
+            '\n'
+            'Click "Sign In" button above to test.';
+        _otpController.clear();
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'OTP Verification Error: $e\n\nMake sure the code is correct and not expired.';
+      });
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _testResendOtp() async {
+    if (_emailController.text.isEmpty) {
+      setState(() => _status = 'Please enter email first');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _status = 'Resending OTP...';
+    });
+
+    try {
+      await AuthService.resendEmailOtp(email: _emailController.text);
+      setState(() {
+        _status =
+            'New OTP Sent! 📧\n'
+            'Check your email: ${_emailController.text}\n'
+            '\n'
+            'Enter the new code below and click "Verify OTP"';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Resend OTP Error: $e';
       });
     } finally {
       setState(() => _loading = false);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
 import 'email_auth_screen.dart';
 import 'phone_auth_screen.dart';
+import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -191,7 +192,10 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (response.user != null) {
         _showSuccess('Accesso effettuato con successo!');
-        // TODO: Navigate to home screen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       }
     } catch (e) {
       _showError('Errore durante l\'accesso con Google: $e');

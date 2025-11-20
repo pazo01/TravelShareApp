@@ -11,6 +11,8 @@ void main() async {
   // Inizializza Supabase
   await SupabaseConfig.initialize();
   
+  // 🔗 Listener per Deep Link (recupero password)
+  _setupDeepLinkListener();
   
   runApp(
     const ProviderScope(

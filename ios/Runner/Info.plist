@@ -45,10 +45,5 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-
-	<!--geolocalization permission-->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>We need your location to show your current position.</string>
-
 </dict>
 </plist>

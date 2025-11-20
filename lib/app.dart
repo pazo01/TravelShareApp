@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
-//import 'presentation/widgets/auth_gate.dart'; // adjust path to where your auth_gate.dart is
 import 'presentation/screens/welcome_screen.dart';
+import 'presentation/screens/auth_screen.dart';
+import 'presentation/screens/phone_auth_screen.dart';
+import 'presentation/screens/email_auth_screen.dart';
+import 'presentation/screens/link_phone_screen.dart';
+import 'presentation/screens/home_screen.dart';
+import 'presentation/screens/profile_screen.dart';
 import 'main.dart' show navigatorKey;
+
+import 'core/config/route_observer.dart'; // ✅ import RouteObserver
 
 class TravelShareApp extends StatelessWidget {
   const TravelShareApp({super.key});
@@ -11,7 +18,12 @@ class TravelShareApp extends StatelessWidget {
     return MaterialApp(
       title: 'TravelShare',
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey, // ✅ Importante per deep link
+      navigatorKey: navigatorKey,
+
+      navigatorObservers: [
+        routeObserver,    // ✅ ACTIVATE ROUTE OBSERVER HERE
+      ],
+
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -30,7 +42,17 @@ class TravelShareApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const WelcomeScreen(),
+
+      initialRoute: '/',
+      routes: {
+        '/': (_) => const WelcomeScreen(),
+        '/auth': (_) => const AuthScreen(),
+        '/phone-login': (_) => const PhoneAuthScreen(),
+        '/email-auth': (_) => const EmailAuthScreen(),
+        '/link-phone': (_) => const LinkPhoneScreen(),
+        '/home': (_) => const HomeScreen(),
+        '/profile': (_) => const ProfileScreen(),
+      },
     );
   }
 }
