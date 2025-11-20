@@ -116,7 +116,10 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
 
   /// Ricerca suggerimenti da Photon/Nominatim
   Future<void> _fetchSuggestions(String query) async {
+    print('🔍🔍🔍 _fetchSuggestions called with: "$query"');
+
     if (query.isEmpty) {
+      print('❌ Query vuota, clearing suggestions');
       setState(() {
         _suggestions = [];
         _showSuggestions = false;
@@ -124,64 +127,86 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
       return;
     }
 
+    print('✅ Starting search...');
     setState(() {
       _isLoading = true;
       _showSuggestions = true;
     });
+    print('📊 State updated: _isLoading=true, _showSuggestions=true');
 
     final url = Uri.parse(
       'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&lang=it&limit=8'
     );
+    print('🌐 URL: $url');
 
     try {
-      print('🔍 Searching for: $query');
+      print('🔍 Fetching from Photon API...');
       final response = await http.get(url).timeout(
         const Duration(seconds: 5),
-        onTimeout: () => throw Exception('Timeout ricerca'),
+        onTimeout: () {
+          print('❌ TIMEOUT after 5 seconds!');
+          throw Exception('Timeout ricerca');
+        },
       );
 
+      print('📡 Response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
+        print('✅ HTTP 200 OK');
         final data = jsonDecode(response.body);
         final features = data['features'] as List<dynamic>;
 
-        print('📍 Found ${features.length} results');
+        print('📍 Found ${features.length} raw results from API');
 
         if (mounted) {
+          final processedSuggestions = features
+              .map((f) {
+                final props = f['properties'];
+                final display = _formatSuggestionDisplay(props);
+
+                // Debug dettagliato
+                print('  📌 Result: name="${props['name'] ?? ''}", '
+                    'street="${props['street'] ?? ''}", '
+                    'city="${props['city'] ?? ''}", '
+                    'display="$display"');
+
+                return {
+                  'name': props['name'] ?? '',
+                  'street': props['street'] ?? '',
+                  'city': props['city'] ?? '',
+                  'state': props['state'] ?? '',
+                  'country': props['country'] ?? '',
+                  'lat': f['geometry']['coordinates'][1],
+                  'lon': f['geometry']['coordinates'][0],
+                  'display': display,
+                };
+              })
+              .toList();
+
+          print('🔧 Processed ${processedSuggestions.length} items BEFORE filtering');
+
+          // RIMUOVO IL FILTRO PER DEBUG
+          final filteredSuggestions = processedSuggestions.take(8).toList();
+
+          print('✅✅✅ Final suggestions count: ${filteredSuggestions.length}');
+
           setState(() {
-            _suggestions = features
-                .map((f) {
-                  final props = f['properties'];
-                  final display = _formatSuggestionDisplay(props);
-
-                  // Debug: mostra cosa stiamo creando
-                  print('  - $display');
-
-                  return {
-                    'name': props['name'] ?? '',
-                    'street': props['street'] ?? '',
-                    'city': props['city'] ?? '',
-                    'state': props['state'] ?? '',
-                    'country': props['country'] ?? '',
-                    'lat': f['geometry']['coordinates'][1],
-                    'lon': f['geometry']['coordinates'][0],
-                    'display': display,
-                  };
-                })
-                .where((item) => (item['display'] as String).isNotEmpty)
-                .take(8)
-                .toList();
-
-            print('✅ Showing ${_suggestions.length} suggestions');
+            _suggestions = filteredSuggestions;
           });
+
+          print('📊 _suggestions.length = ${_suggestions.length}');
+          print('📊 _showSuggestions = $_showSuggestions');
         }
       } else {
         print('❌ HTTP Error: ${response.statusCode}');
       }
-    } catch (e) {
-      print("❌ Errore ricerca: $e");
+    } catch (e, stack) {
+      print("❌❌❌ ERRORE RICERCA: $e");
+      print("Stack trace: $stack");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+        print('📊 Loading finished: _isLoading=false');
       }
     }
   }
