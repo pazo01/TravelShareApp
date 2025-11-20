@@ -18,12 +18,14 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   LatLng? _selectedPoint;
   String? _selectedAddress;
   List<Map<String, dynamic>> _suggestions = [];
   bool _isLoading = false;
-  
+  bool _showSuggestions = false;
+
   // Per future implementazioni (Giorno 7)
   double _flexibleRadius = 1000; // metri
   bool _showRadius = false; // Per ora nascosto
@@ -32,10 +34,17 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   void initState() {
     super.initState();
     _getCurrentLocation();
+
+    // Focus listener per gestire apertura/chiusura suggerimenti
+    _searchFocusNode.addListener(() {
+      if (_searchFocusNode.hasFocus && _searchController.text.isNotEmpty) {
+        setState(() => _showSuggestions = true);
+      }
+    });
   }
 
   /// Ottiene posizione corrente all'apertura
-  /// NON riempie il campo di ricerca - lascia che l'utente digiti liberamente
+  /// Centra la mappa ma lascia il campo ricerca vuoto
   Future<void> _getCurrentLocation() async {
     try {
       final position = await _locationService.getCurrentPosition();
@@ -43,21 +52,16 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
         final point = LatLng(position.latitude, position.longitude);
         if (mounted) {
           _mapController.move(point, 15);
-          // NON impostiamo _selectedPoint né chiamiamo _getAddressFromLatLng
-          // Lasciamo il campo di ricerca vuoto per permettere all'utente di digitare
         }
       }
     } on LocationServiceException catch (e) {
-      // Errore gestito: mostra solo un messaggio senza bloccare l'app
       print('⚠️ Location error (handled): ${e.title} - ${e.message}');
       if (mounted) {
-        // Centra su Roma se non riesce
         _mapController.move(LatLng(41.9028, 12.4964), 13);
       }
     } catch (e) {
       print('❌ Unexpected location error: $e');
       if (mounted) {
-        // Se non riesce, centra su Roma
         _mapController.move(LatLng(41.9028, 12.4964), 13);
       }
     }
@@ -66,18 +70,17 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   /// Converte coordinate in indirizzo
   Future<void> _getAddressFromLatLng(LatLng position) async {
     if (!mounted) return;
-    
+
     try {
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
-      
+
       if (placemarks.isNotEmpty && mounted) {
         final p = placemarks.first;
         setState(() {
           _selectedAddress = _formatAddress(p);
-          _searchController.text = _selectedAddress!;
         });
       }
     } catch (e) {
@@ -94,7 +97,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   /// Formatta l'indirizzo in modo leggibile
   String _formatAddress(Placemark p) {
     final parts = <String>[];
-    
+
     if (p.street != null && p.street!.isNotEmpty) {
       parts.add(p.street!);
     }
@@ -107,55 +110,75 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
     if (p.country != null && p.country!.isNotEmpty) {
       parts.add(p.country!);
     }
-    
+
     return parts.isNotEmpty ? parts.join(', ') : 'Posizione selezionata';
   }
 
   /// Ricerca suggerimenti da Photon/Nominatim
   Future<void> _fetchSuggestions(String query) async {
-    // Mostra suggerimenti da subito (anche con 1 carattere)
     if (query.isEmpty) {
-      setState(() => _suggestions = []);
+      setState(() {
+        _suggestions = [];
+        _showSuggestions = false;
+      });
       return;
     }
 
-    setState(() => _isLoading = true);
-    
-    // Usa Photon (più veloce) o Nominatim come fallback
+    setState(() {
+      _isLoading = true;
+      _showSuggestions = true;
+    });
+
     final url = Uri.parse(
-      'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&lang=it&limit=5'
+      'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&lang=it&limit=8'
     );
 
     try {
+      print('🔍 Searching for: $query');
       final response = await http.get(url).timeout(
         const Duration(seconds: 5),
         onTimeout: () => throw Exception('Timeout ricerca'),
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final features = data['features'] as List<dynamic>;
-        
+
+        print('📍 Found ${features.length} results');
+
         if (mounted) {
           setState(() {
             _suggestions = features
-                .map((f) => {
-                  'name': f['properties']['name'] ?? '',
-                  'city': f['properties']['city'] ?? '',
-                  'state': f['properties']['state'] ?? '',
-                  'country': f['properties']['country'] ?? '',
-                  'lat': f['geometry']['coordinates'][1],
-                  'lon': f['geometry']['coordinates'][0],
-                  'display': _formatSuggestion(f['properties']),
+                .map((f) {
+                  final props = f['properties'];
+                  final display = _formatSuggestionDisplay(props);
+
+                  // Debug: mostra cosa stiamo creando
+                  print('  - $display');
+
+                  return {
+                    'name': props['name'] ?? '',
+                    'street': props['street'] ?? '',
+                    'city': props['city'] ?? '',
+                    'state': props['state'] ?? '',
+                    'country': props['country'] ?? '',
+                    'lat': f['geometry']['coordinates'][1],
+                    'lon': f['geometry']['coordinates'][0],
+                    'display': display,
+                  };
                 })
-                .where((item) => item['name'] != '')
-                .take(5)
+                .where((item) => (item['display'] as String).isNotEmpty)
+                .take(8)
                 .toList();
+
+            print('✅ Showing ${_suggestions.length} suggestions');
           });
         }
+      } else {
+        print('❌ HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
-      print("Errore ricerca: $e");
+      print("❌ Errore ricerca: $e");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -163,15 +186,29 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
     }
   }
 
-  /// Formatta suggerimento per display
-  String _formatSuggestion(Map<String, dynamic> props) {
+  /// Formatta suggerimento per display (più intelligente)
+  String _formatSuggestionDisplay(Map<String, dynamic> props) {
     final parts = <String>[];
-    
-    if (props['name'] != null) parts.add(props['name']);
-    if (props['city'] != null) parts.add(props['city']);
-    if (props['state'] != null) parts.add(props['state']);
-    if (props['country'] != null) parts.add(props['country']);
-    
+
+    // Priorità: name > street > city
+    if (props['name'] != null && props['name'].toString().isNotEmpty) {
+      parts.add(props['name']);
+    } else if (props['street'] != null && props['street'].toString().isNotEmpty) {
+      parts.add(props['street']);
+    }
+
+    if (props['city'] != null && props['city'].toString().isNotEmpty) {
+      parts.add(props['city']);
+    }
+
+    if (props['state'] != null && props['state'].toString().isNotEmpty) {
+      parts.add(props['state']);
+    }
+
+    if (props['country'] != null && props['country'].toString().isNotEmpty) {
+      parts.add(props['country']);
+    }
+
     return parts.join(', ');
   }
 
@@ -179,21 +216,34 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   void _selectSuggestion(Map<String, dynamic> suggestion) {
     final point = LatLng(suggestion['lat'], suggestion['lon']);
     _mapController.move(point, 16);
+
     setState(() {
       _selectedPoint = point;
       _selectedAddress = suggestion['display'];
       _suggestions = [];
+      _showSuggestions = false;
       _searchController.text = _selectedAddress!;
     });
+
+    // Chiudi la tastiera
+    _searchFocusNode.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("Scegli la destinazione"),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          "Scegli destinazione",
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         actions: [
-          // Info button
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: _showInfoDialog,
@@ -214,21 +264,20 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
                 setState(() {
                   _selectedPoint = point;
                   _suggestions = [];
+                  _showSuggestions = false;
                 });
                 _getAddressFromLatLng(point);
+                _searchFocusNode.unfocus();
               },
             ),
             children: [
-              // Tile Layer
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.travelshare',
                 maxZoom: 19,
               ),
-              
-              // Marker Layer
+
               if (_selectedPoint != null) ...[
-                // Raggio flessibile (per implementazione futura)
                 if (_showRadius)
                   CircleLayer(
                     circles: [
@@ -242,8 +291,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
                       ),
                     ],
                   ),
-                
-                // Marker principale
+
                 MarkerLayer(
                   markers: [
                     Marker(
@@ -269,164 +317,272 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
             ],
           ),
 
-          // SEARCH BAR & SUGGESTIONS
-          Positioned(
-            top: 20,
-            left: 20,
-            right: 20,
-            child: Column(
-              children: [
-                // Search field
-                Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(12),
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    textInputAction: TextInputAction.search,
-                    onChanged: (value) {
-                      _fetchSuggestions(value);
-                    },
-                    onSubmitted: (value) {
-                      // Quando l'utente preme Invio, seleziona il primo suggerimento
-                      if (_suggestions.isNotEmpty) {
-                        _selectSuggestion(_suggestions.first);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      hintText: "Digita la tua destinazione...",
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _isLoading
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchController.clear();
-                                      _suggestions = [];
-                                    });
-                                  },
-                                )
-                              : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Suggestions list
-                if (_suggestions.isNotEmpty)
+          // SEARCH BAR & SUGGESTIONS (DESIGN MODERNO)
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Search field con design moderno
                   Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    constraints: const BoxConstraints(maxHeight: 200),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
+                          blurRadius: 20,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _suggestions.length,
-                      itemBuilder: (context, index) {
-                        final s = _suggestions[index];
-                        return ListTile(
-                          leading: const Icon(Icons.location_on, color: Colors.grey),
-                          title: Text(
-                            s['name'],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            "${s['city'] ?? ''} ${s['country'] ?? ''}".trim(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => _selectSuggestion(s),
-                        );
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      autofocus: true,
+                      textInputAction: TextInputAction.search,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      onChanged: (value) {
+                        _fetchSuggestions(value);
                       },
+                      onSubmitted: (value) {
+                        if (_suggestions.isNotEmpty) {
+                          _selectSuggestion(_suggestions.first);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Dove vuoi andare?",
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontWeight: FontWeight.w400,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: theme.primaryColor,
+                          size: 24,
+                        ),
+                        suffixIcon: _isLoading
+                            ? Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: theme.primaryColor,
+                                  ),
+                                ),
+                              )
+                            : _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchController.clear();
+                                        _suggestions = [];
+                                        _showSuggestions = false;
+                                      });
+                                    },
+                                  )
+                                : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                      ),
                     ),
                   ),
-              ],
-            ),
-          ),
 
-          // Current location button
-          Positioned(
-            bottom: 120,
-            right: 20,
-            child: FloatingActionButton(
-              mini: true,
-              backgroundColor: Colors.white,
-              onPressed: _goToCurrentLocation,
-              child: const Icon(Icons.my_location, color: Colors.blue),
-            ),
-          ),
+                  // Suggestions list (DESIGN MODERNO)
+                  if (_showSuggestions && _suggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: _suggestions.length,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          indent: 60,
+                          endIndent: 16,
+                          color: Colors.grey[200],
+                        ),
+                        itemBuilder: (context, index) {
+                          final s = _suggestions[index];
+                          final isFirst = index == 0;
 
-          // Confirm button
-          Positioned(
-            bottom: 30,
-            left: 50,
-            right: 50,
-            child: ElevatedButton.icon(
-              onPressed: _selectedPoint == null ? null : _confirmSelection,
-              icon: const Icon(Icons.check),
-              label: const Text("Conferma destinazione"),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 4,
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _selectSuggestion(s),
+                              borderRadius: BorderRadius.vertical(
+                                top: isFirst ? const Radius.circular(16) : Radius.zero,
+                                bottom: index == _suggestions.length - 1
+                                    ? const Radius.circular(16)
+                                    : Radius.zero,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: theme.primaryColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.location_on,
+                                        color: theme.primaryColor,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            s['name']?.isNotEmpty == true
+                                                ? s['name']
+                                                : s['street']?.isNotEmpty == true
+                                                    ? s['street']
+                                                    : s['city'] ?? 'Luogo',
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            "${s['city'] ?? ''} ${s['country'] ?? ''}".trim(),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[600],
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 16,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
 
-          // Selected address display
+          // Current location button (DESIGN MODERNO)
+          Positioned(
+            bottom: 140,
+            right: 20,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _goToCurrentLocation,
+                  customBorder: const CircleBorder(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Icon(
+                      Icons.my_location,
+                      color: theme.primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Selected address display (DESIGN MODERNO)
           if (_selectedAddress != null)
             Positioned(
-              bottom: 90,
+              bottom: 100,
               left: 20,
               right: 20,
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.location_on, color: Colors.red, size: 20),
-                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.location_pin,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         _selectedAddress!,
-                        style: const TextStyle(fontSize: 14),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -435,6 +591,41 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
                 ),
               ),
             ),
+
+          // Confirm button (DESIGN MODERNO)
+          Positioned(
+            bottom: 30,
+            left: 20,
+            right: 20,
+            child: ElevatedButton(
+              onPressed: _selectedPoint == null ? null : _confirmSelection,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: theme.primaryColor,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey[300],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: _selectedPoint == null ? 0 : 8,
+                shadowColor: theme.primaryColor.withOpacity(0.4),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.check_circle, size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    "Conferma destinazione",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -443,7 +634,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   /// Va alla posizione corrente
   Future<void> _goToCurrentLocation() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final position = await _locationService.getCurrentPosition(forceRefresh: true);
       if (position != null && mounted) {
@@ -470,12 +661,12 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   /// Conferma selezione
   void _confirmSelection() {
     if (_selectedPoint == null) return;
-    
+
     Navigator.pop(context, {
       'lat': _selectedPoint!.latitude,
       'lng': _selectedPoint!.longitude,
       'address': _selectedAddress ?? 'Posizione selezionata',
-      'radius': _flexibleRadius, // Per uso futuro
+      'radius': _flexibleRadius,
     });
   }
 
@@ -484,22 +675,30 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Come funziona'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Come funziona',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         content: const SingleChildScrollView(
           child: Text(
-            '1. Digita il tuo indirizzo di destinazione nella barra di ricerca\n\n'
-            '2. Vedrai suggerimenti in tempo reale dalla mappa mentre scrivi\n\n'
-            '3. Seleziona un suggerimento o tocca direttamente sulla mappa\n\n'
-            '4. Puoi anche usare il pulsante GPS per la tua posizione attuale\n\n'
-            '5. Conferma la destinazione selezionata\n\n'
-            'Prossimamente: potrai impostare un raggio flessibile '
-            'per aumentare le possibilità di trovare compagni di viaggio!',
+            '🔍 Digita il tuo indirizzo di destinazione\n\n'
+            '📍 Vedrai suggerimenti in tempo reale\n\n'
+            '👆 Tocca un suggerimento o la mappa\n\n'
+            '📱 Usa il pulsante GPS per la posizione attuale\n\n'
+            '✅ Conferma la destinazione scelta',
+            style: TextStyle(fontSize: 15, height: 1.5),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: const Text(
+              'HO CAPITO',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -511,6 +710,9 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: Text(title),
         content: Text(message),
         actions: [
@@ -534,6 +736,7 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 }
