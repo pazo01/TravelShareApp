@@ -569,7 +569,12 @@ class _FlightScreenState extends State<FlightScreen> {
             };
             final allTrips = [...matchResponse, currentTrip];
 
-            await GroupService.createOrJoinGroup(matchedTrips: allTrips);
+            await GroupService.createOrJoinGroup(
+  matchedTrips: matchResponse,   // ONLY other user trips
+  currentTrip: currentTrip,      // ONLY this user's trip
+);
+
+
             print('🎉 Gruppo creato/aggiornato con successo!');
           } else {
             print('ℹ️ Nessun match trovato al momento. Il viaggio resta in attesa.');

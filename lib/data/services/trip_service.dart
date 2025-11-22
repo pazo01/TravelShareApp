@@ -9,9 +9,9 @@ class TripService {
 
   final SupabaseClient _client = SupabaseConfig.client;
 
-  /// ---------------------------------------------------------------------------
-  /// CREA UN NUOVO VIAGGIO
-  /// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // CREA UN NUOVO VIAGGIO
+  // ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> createTrip({
     required String flightNumber,
     required String airline,
@@ -22,7 +22,7 @@ class TripService {
     required double destinationLat,
     required double destinationLng,
     String? status,
-    Map<String, dynamic>? additionalFlightData,   // ✅ RESTORED
+    Map<String, dynamic>? additionalFlightData,
   }) async {
     try {
       final userId = _client.auth.currentUser?.id;
@@ -30,7 +30,6 @@ class TripService {
         throw Exception('Utente non autenticato');
       }
 
-      // 1️⃣ CREA O RECUPERA IL VOLO
       final flightData = await _createOrGetFlight(
         flightNumber: flightNumber,
         airline: airline,
@@ -44,7 +43,6 @@ class TripService {
         throw Exception('Impossibile creare il volo');
       }
 
-      // 2️⃣ CREA IL VIAGGIO
       final tripData = await _client
           .from('trips')
           .insert({
@@ -63,18 +61,16 @@ class TripService {
           .select()
           .single();
 
-      print('✅ Viaggio creato con successo: ${tripData['id']}');
       return tripData;
-
     } catch (e) {
       print('❌ Errore creazione viaggio: $e');
       rethrow;
     }
   }
 
-  /// ---------------------------------------------------------------------------
-  /// CREA O RECUPERA IL VOLO (UPSERT)
-  /// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // CREA O RECUPERA IL VOLO (UPSERT)
+  // ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> _createOrGetFlight({
     required String flightNumber,
     required String airline,
@@ -97,18 +93,16 @@ class TripService {
           .select('id')
           .single();
 
-      print('✈️ Volo gestito (upsert): ${flightData['id']}');
       return flightData;
-
     } catch (e) {
       print('❌ Errore gestione volo: $e');
       rethrow;
     }
   }
 
-  /// ---------------------------------------------------------------------------
-  /// RECUPERA I VIAGGI DELL'UTENTE (NO JOIN CON GROUP_MEMBERS)
-  /// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // RECUPERA I VIAGGI DELL'UTENTE (SIMPLE + WORKING)
+  // ---------------------------------------------------------------------------
   Future<List<Map<String, dynamic>>> getUserTrips() async {
     try {
       final userId = _client.auth.currentUser?.id;
@@ -132,22 +126,17 @@ class TripService {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      print('📚 Viaggi recuperati: ${trips.length}');
       return List<Map<String, dynamic>>.from(trips);
-
     } catch (e) {
       print('❌ Errore recupero viaggi: $e');
       return [];
     }
   }
 
-  /// ---------------------------------------------------------------------------
-  /// RECUPERA group_id DAL trip_id  (PER CHAT)
-  /// ---------------------------------------------------------------------------
-    Future<String?> getGroupIdForTrip(String tripId) async {
-    print("🟦 DEBUG → getGroupIdForTrip() called");
-    print("🟦 tripId received: $tripId");
-
+  // ---------------------------------------------------------------------------
+  // RECUPERA group_id DAL trip_id (PER CHAT)
+  // ---------------------------------------------------------------------------
+  Future<String?> getGroupIdForTrip(String tripId) async {
     try {
       final result = await _client
           .from('group_members')
@@ -155,48 +144,40 @@ class TripService {
           .eq('trip_id', tripId)
           .maybeSingle();
 
-      print("🟩 DEBUG → Supabase result: $result");
-
       if (result == null) {
-        print("🟥 DEBUG → No group_members row found for this trip");
         return null;
       }
 
-      print("🟢 DEBUG → Found group_id: ${result['group_id']}");
       return result['group_id'].toString();
-
     } catch (e) {
-      print('❌ DEBUG ERROR getGroupIdForTrip: $e');
+      print('❌ ERROR getGroupIdForTrip: $e');
       return null;
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // CANCELLA UN VIAGGIO
+  // ---------------------------------------------------------------------------
+  Future<void> deleteTrip(String tripId) async {
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) throw Exception('Utente non autenticato');
 
-    /// ---------------------------------------------------------------------------
-    /// CANCELLA UN VIAGGIO
-    /// ---------------------------------------------------------------------------
-    Future<void> deleteTrip(String tripId) async {
-      try {
-        final userId = _client.auth.currentUser?.id;
-        if (userId == null) throw Exception('Utente non autenticato');
+      await _client
+          .from('trips')
+          .delete()
+          .eq('id', tripId)
+          .eq('user_id', userId);
 
-        await _client
-            .from('trips')
-            .delete()
-            .eq('id', tripId)
-            .eq('user_id', userId);
-
-        print('🗑️ Viaggio eliminato: $tripId');
-
-      } catch (e) {
-        print('❌ Errore eliminazione viaggio: $e');
-        rethrow;
-      }
+    } catch (e) {
+      print('❌ Errore eliminazione viaggio: $e');
+      rethrow;
     }
+  }
 
-  /// ---------------------------------------------------------------------------
-  /// AGGIORNA STATO VIAGGIO
-  /// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // AGGIORNA STATO VIAGGIO
+  // ---------------------------------------------------------------------------
   Future<void> updateTripStatus(String tripId, String newStatus) async {
     try {
       await _client
@@ -204,17 +185,15 @@ class TripService {
           .update({'status': newStatus})
           .eq('id', tripId);
 
-      print('🔄 Stato viaggio aggiornato: $newStatus');
-
     } catch (e) {
       print('❌ Errore aggiornamento stato: $e');
       rethrow;
     }
   }
 
-  /// ---------------------------------------------------------------------------
-  /// DETTAGLI DI UN VIAGGIO
-  /// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // DETTAGLI DI UN VIAGGIO
+  // ---------------------------------------------------------------------------
   Future<Map<String, dynamic>?> getTripDetails(String tripId) async {
     try {
       return await _client
@@ -222,10 +201,39 @@ class TripService {
           .select('*, flights:flight_id (*)')
           .eq('id', tripId)
           .maybeSingle();
-
     } catch (e) {
       print('❌ Errore recupero dettagli viaggio: $e');
       return null;
     }
   }
+
+//----------------------------------------------------------------------------
+// RECUPERA GRUPPO RELATIVO AL VIAGGIO
+//----------------------------------------------------------------------------
+  Future<Map<String, dynamic>?> getGroupForTrip(String tripId) async {
+  try {
+    final row = await _client
+        .from('group_members')
+        .select('''
+          group_id,
+          groups:group_id (
+            id,
+            current_members,
+            max_members,
+            status
+          )
+        ''')
+        .eq('trip_id', tripId)
+        .maybeSingle();
+
+    return row?['groups']; // Returns null or the groups object
+  } catch (e) {
+    print('❌ Errore getGroupForTrip: $e');
+    return null;
+  }
+}
+
+
+
+
 }

@@ -29,10 +29,17 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     try {
       final trips = await _tripService.getUserTrips();
       print('📱 Viaggi caricati nella UI: ${trips.length}');
+      // Load group info for each trip
+      for (var trip in trips) {
+        final group = await _tripService.getGroupForTrip(trip['id']);
+        trip['group_data'] = group; // attach to the trip
+      }
+
       setState(() {
         _trips = trips;
         _isLoading = false;
       });
+
     } catch (e) {
       print('❌ Errore caricamento viaggi: $e');
       setState(() => _isLoading = false);
@@ -133,7 +140,8 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
         ? DateTime.tryParse(flight!['scheduled_arrival'].toString())
         : null;
 
-    final statusInfo = _getTripStatusInfo(trip['status']?.toString());
+    final statusInfo = _getTripStatusInfo(trip);
+
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -308,46 +316,39 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 
-  Map<String, dynamic> _getTripStatusInfo(String? status) {
-    switch (status) {
-      case 'looking_for_match':
-        return {
-          'label': 'Cerco compagni',
-          'icon': Icons.search,
-          'color': Colors.orange.shade100,
-        };
-      case 'matched':
-        return {
-          'label': 'Gruppo trovato',
-          'icon': Icons.group,
-          'color': Colors.green.shade100,
-        };
-      case 'confirmed':
-        return {
-          'label': 'Confermato',
-          'icon': Icons.check_circle,
-          'color': Colors.blue.shade100,
-        };
-      case 'completed':
-        return {
-          'label': 'Completato',
-          'icon': Icons.done_all,
-          'color': Colors.grey.shade200,
-        };
-      case 'cancelled':
-        return {
-          'label': 'Annullato',
-          'icon': Icons.cancel,
-          'color': Colors.red.shade100,
-        };
-      default:
-        return {
-          'label': 'In attesa',
-          'icon': Icons.hourglass_empty,
-          'color': Colors.grey.shade100,
-        };
-    }
+  Map<String, dynamic> _getTripStatusInfo(Map<String, dynamic> trip) {
+  final group = trip['group_data'] as Map<String, dynamic>?;
+
+  final int current = group?['current_members'] ?? 0;
+  final int max = group?['max_members'] ?? 4;
+
+  String matchIndicator = current > 0 ? " • $current/$max" : "";
+
+  final status = trip['status'] ?? 'looking_for_match';
+
+  switch (status) {
+    case 'looking_for_match':
+      return {
+        'label': 'Cerco compagni$matchIndicator',
+        'icon': Icons.search,
+        'color': Colors.orange.shade100,
+      };
+    case 'matched':
+      return {
+        'label': 'Gruppo trovato$matchIndicator',
+        'icon': Icons.group,
+        'color': Colors.green.shade100,
+      };
+    default:
+      return {
+        'label': 'In attesa$matchIndicator',
+        'icon': Icons.hourglass_empty,
+        'color': Colors.grey.shade100,
+      };
   }
+}
+
+
 
   void _showTripDetails(Map<String, dynamic> trip) {
     final flight = trip['flights'] as Map<String, dynamic>?;
@@ -415,9 +416,9 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                 _buildDetailSection(
                   icon: Icons.info_outline,
                   title: 'Stato',
-                  content: _getTripStatusInfo(
-                      trip['status']?.toString())['label'] as String,
+                  content: _getTripStatusInfo(trip)['label'] as String,
                 ),
+
 
                 const SizedBox(height: 20),
                 Row(
