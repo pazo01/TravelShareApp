@@ -153,9 +153,9 @@ class _DestinationPickerScreenState extends State<DestinationPickerScreen> {
           'User-Agent': 'TravelShareApp/1.0', // Nominatim richiede User-Agent
         },
       ).timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 15), // Aumentato a 15 secondi
         onTimeout: () {
-          print('❌ TIMEOUT after 5 seconds!');
+          print('❌ TIMEOUT after 15 seconds!');
           throw Exception('Timeout ricerca');
         },
       );
