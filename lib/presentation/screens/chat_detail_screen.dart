@@ -183,12 +183,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
                           final message = _messages[index];
-                          final senderId = message['sender_id'] as String;
+                          final senderId = message['user_id'] as String;
                           final isMe = senderId == currentUserId;
                           final content = message['content'] as String;
                           final createdAt = message['created_at'] as String;
-                          final type = message['type'] as String? ?? 'text';
-                          final senderProfile = message['profiles'] as Map<String, dynamic>?;
+                          final type = message['message_type'] as String? ?? 'text';
+                          final senderProfile = message['user_profiles'] as Map<String, dynamic>?;
                           final senderName = senderProfile?['full_name'] as String? ?? 'Unknown';
 
                           // Messaggio di sistema

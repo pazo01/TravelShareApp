@@ -109,11 +109,11 @@ class ChatService {
           .select('''
             id,
             chat_id,
-            sender_id,
+            user_id,
             content,
-            type,
+            message_type,
             created_at,
-            profiles:sender_id(
+            user_profiles:user_id(
               full_name,
               avatar_url
             )
@@ -145,9 +145,9 @@ class ChatService {
 
       await _supabase.from('messages').insert({
         'chat_id': chatId,
-        'sender_id': userId,
+        'user_id': userId,
         'content': content,
-        'type': type,
+        'message_type': type,
       });
 
       print('✅ Message sent successfully');
@@ -177,7 +177,7 @@ class ChatService {
           .select('''
             user_id,
             joined_at,
-            profiles:user_id(
+            user_profiles:user_id(
               full_name,
               avatar_url
             )

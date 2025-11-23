@@ -98,9 +98,9 @@ class GroupService {
                 // Invia messaggio di sistema
                 await _supabase.from('messages').insert({
                   'chat_id': chatId,
-                  'sender_id': currentUser?.id,
+                  'user_id': currentUser?.id,
                   'content': '👋 ${newMembers.length} nuov${newMembers.length == 1 ? 'o' : 'i'} viaggiator${newMembers.length == 1 ? 'e' : 'i'} aggiunt${newMembers.length == 1 ? 'o' : 'i'} al gruppo!',
-                  'type': 'system',
+                  'message_type': 'system',
                 });
               }
 
@@ -176,9 +176,9 @@ class GroupService {
       // Invia messaggio di benvenuto automatico
       await _supabase.from('messages').insert({
         'chat_id': chatId,
-        'sender_id': currentUser?.id,
+        'user_id': currentUser?.id,
         'content': '👋 Benvenuti nel gruppo! Avete un viaggio in comune. Siete ${membersForNewGroup.length} viaggiatori.',
-        'type': 'system',
+        'message_type': 'system',
       });
 
       print('✅ Successfully created new group with chat: $groupId');
