@@ -3,17 +3,25 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class MatchingService {
   static final _supabase = Supabase.instance.client;
 
-  /// 🧩 Finds compatible trips based on arrival airport and scheduled arrival time (±30 min)
+  /// 🧩 Finds compatible trips based on:
+  /// - Arrival airport (same airport)
+  /// - Scheduled arrival time (±30 min)
+  /// - Destination location (within 5km radius)
   static Future<List<Map<String, dynamic>>> findCompatibleTrips({
     required String userId,
     required String arrivalAirport,
     required DateTime scheduledArrival,
+    required double destinationLat,
+    required double destinationLng,
+    double maxDistanceKm = 5.0,
   }) async {
     try {
       print('🚀 Calling find_compatible_trips...');
       print('📤 Params → user_id: $userId');
       print('📤 Params → airport: $arrivalAirport');
       print('📤 Params → scheduled_arrival: $scheduledArrival');
+      print('📤 Params → destination: ($destinationLat, $destinationLng)');
+      print('📤 Params → max_distance: ${maxDistanceKm}km');
 
       final response = await _supabase.rpc(
         'find_compatible_trips',
@@ -21,6 +29,9 @@ class MatchingService {
           'p_user_id': userId,
           'p_arrival_airport': arrivalAirport,
           'p_scheduled_arrival': scheduledArrival.toIso8601String(),
+          'p_destination_lat': destinationLat,
+          'p_destination_lng': destinationLng,
+          'p_max_distance_km': maxDistanceKm,
         },
       );
 

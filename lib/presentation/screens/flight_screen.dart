@@ -550,6 +550,8 @@ class _FlightScreenState extends State<FlightScreen> {
       try {
         final user = SupabaseConfig.client.auth.currentUser;
         final scheduledArrival = _flightInfo!.scheduledArrival;
+        final destinationLat = _selectedDestination!['lat'] as double;
+        final destinationLng = _selectedDestination!['lng'] as double;
 
         // Verifica che abbiamo tutti i dati necessari per il matching
         if (user != null && scheduledArrival != null && tripId != null) {
@@ -557,6 +559,9 @@ class _FlightScreenState extends State<FlightScreen> {
             userId: user.id,
             arrivalAirport: _flightInfo!.arrivalAirport,
             scheduledArrival: scheduledArrival,
+            destinationLat: destinationLat,
+            destinationLng: destinationLng,
+            maxDistanceKm: 5.0, // Max 5km tra destinazioni
           );
 
           if (matchResponse.isNotEmpty) {
