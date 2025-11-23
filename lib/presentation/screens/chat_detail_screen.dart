@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/chat_service.dart';
-import '../../config/supabase_config.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
@@ -103,7 +103,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
 
     return Scaffold(
       backgroundColor: Colors.grey[100],

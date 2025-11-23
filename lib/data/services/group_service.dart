@@ -5,19 +5,26 @@ class GroupService {
   static const int MAX_GROUP_SIZE = 4;
 
   /// Crea o unisce a un gruppo con limite di 4 persone
-  /// Quando un gruppo raggiunge 4 membri, crea automaticamente un nuovo gruppo
+  /// Crea il gruppo SUBITO quando ci sono 2+ persone che fanno match
+  /// Aggiunge nuove persone ai gruppi esistenti finché non raggiungono 4 membri
   static Future<String> createOrJoinGroup({
     required List<Map<String, dynamic>> matchedTrips,
   }) async {
     try {
       final currentUser = _supabase.auth.currentUser;
       print('👤 User ID: ${currentUser?.id}');
-      print('🔍 Checking for existing groups with space...');
+      print('🔍 Creating/joining group for ${matchedTrips.length} matched trips');
+
+      // IMPORTANTE: Creiamo il gruppo SUBITO se ci sono almeno 2 persone
+      if (matchedTrips.length < 2) {
+        print('⚠️ Need at least 2 people to create a group');
+        throw Exception('Servono almeno 2 persone per creare un gruppo');
+      }
 
       // Raccogli tutti gli user IDs
       final userIds = matchedTrips.map((t) => t['user_id'] as String).toList();
 
-      // Cerca gruppi esistenti per questi utenti
+      // Cerca gruppi esistenti per questi utenti che hanno ancora spazio
       final existingGroups = await _supabase
           .from('group_members')
           .select('group_id')
@@ -41,9 +48,9 @@ class GroupService {
           final currentMembers = groupInfo['current_members'] as int;
           final chatId = groupInfo['chat_id'] as String?;
 
-          print('📊 Group $groupId has $currentMembers members (max: $MAX_GROUP_SIZE)');
+          print('📊 Group $groupId has $currentMembers/$MAX_GROUP_SIZE members');
 
-          // Controlla se c'è spazio
+          // CONTROLLA SE C'È SPAZIO (< 4 membri)
           if (currentMembers < MAX_GROUP_SIZE) {
             // Calcola quanti nuovi membri possiamo aggiungere
             final availableSlots = MAX_GROUP_SIZE - currentMembers;
@@ -61,7 +68,8 @@ class GroupService {
                 .toList();
 
             if (newMembers.isNotEmpty) {
-              print('➕ Adding ${newMembers.length} members to group $groupId');
+              print('➕ Adding ${newMembers.length} members to existing group $groupId');
+              print('   Group will have ${currentMembers + newMembers.length}/$MAX_GROUP_SIZE members');
 
               // Incrementa contatore membri
               await _supabase.rpc('increment_group_members', params: {
@@ -86,9 +94,29 @@ class GroupService {
                     'user_id': trip['user_id'],
                   });
                 }
+
+                // Invia messaggio di sistema
+                await _supabase.from('messages').insert({
+                  'chat_id': chatId,
+                  'sender_id': currentUser?.id,
+                  'content': '👋 ${newMembers.length} nuov${newMembers.length == 1 ? 'o' : 'i'} viaggiator${newMembers.length == 1 ? 'e' : 'i'} aggiunt${newMembers.length == 1 ? 'o' : 'i'} al gruppo!',
+                  'type': 'system',
+                });
               }
 
               print('✅ Successfully added members to existing group: $groupId');
+
+              // Se ci sono ancora membri da aggiungere, chiamata ricorsiva
+              final remainingMembers = matchedTrips
+                  .where((t) => !existingUserIds.contains(t['user_id']))
+                  .skip(availableSlots)
+                  .toList();
+
+              if (remainingMembers.isNotEmpty) {
+                print('♻️ Creating additional group for ${remainingMembers.length} remaining members...');
+                await createOrJoinGroup(matchedTrips: remainingMembers);
+              }
+
               return groupId;
             }
           } else {
@@ -97,11 +125,12 @@ class GroupService {
         }
       }
 
-      // Se arriviamo qui, dobbiamo creare un nuovo gruppo
-      // Prendi solo i primi 4 membri
+      // NESSUN GRUPPO ESISTENTE CON SPAZIO → CREA NUOVO GRUPPO
+      // Prendi max 4 membri per questo gruppo
       final membersForNewGroup = matchedTrips.take(MAX_GROUP_SIZE).toList();
 
-      print('🆕 Creating new group with ${membersForNewGroup.length} members');
+      print('🆕 Creating NEW group with ${membersForNewGroup.length} members');
+      print('   (minimum 2, maximum 4 members per group)');
 
       // Crea prima la chat
       final newChat = await _supabase
@@ -128,7 +157,7 @@ class GroupService {
           .single();
 
       final groupId = newGroup['id'] as String;
-      print('🆕 Created new group: $groupId');
+      print('🆕 Created new group: $groupId with ${membersForNewGroup.length}/$MAX_GROUP_SIZE members');
 
       // Aggiungi membri al gruppo e alla chat
       for (final trip in membersForNewGroup) {
@@ -148,7 +177,7 @@ class GroupService {
       await _supabase.from('messages').insert({
         'chat_id': chatId,
         'sender_id': currentUser?.id,
-        'content': '👋 Benvenuti nel gruppo! Avete un viaggio in comune.',
+        'content': '👋 Benvenuti nel gruppo! Avete un viaggio in comune. Siete ${membersForNewGroup.length} viaggiatori.',
         'type': 'system',
       });
 
