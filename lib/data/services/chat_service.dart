@@ -27,20 +27,14 @@ class ChatService {
 
       final chatIds = chatMembers.map((m) => m['chat_id'] as String).toList();
 
-      // Ottieni i dettagli delle chat con l'ultimo messaggio
+      // Ottieni i dettagli delle chat
       final chats = await _supabase
           .from('chats')
           .select('''
             id,
             name,
             is_group,
-            created_at,
-            messages(
-              content,
-              created_at,
-              sender_id,
-              type
-            )
+            created_at
           ''')
           .inFilter('id', chatIds)
           .order('created_at', ascending: false);
@@ -48,29 +42,38 @@ class ChatService {
       // Processa ogni chat per ottenere l'ultimo messaggio
       final processedChats = <Map<String, dynamic>>[];
       for (final chat in chats) {
-        final messages = chat['messages'] as List<dynamic>?;
         String? lastMessage;
         DateTime? lastMessageTime;
-
-        if (messages != null && messages.isNotEmpty) {
-          // Ordina messaggi per data (più recente prima)
-          final sortedMessages = List<Map<String, dynamic>>.from(messages);
-          sortedMessages.sort((a, b) {
-            final dateA = DateTime.parse(a['created_at']);
-            final dateB = DateTime.parse(b['created_at']);
-            return dateB.compareTo(dateA);
-          });
-
-          lastMessage = sortedMessages.first['content'] as String?;
-          lastMessageTime = DateTime.parse(sortedMessages.first['created_at']);
+        
+        // Recupera l'ultimo messaggio per questa chat separatamente
+        try {
+          final messages = await _supabase
+              .from('messages')
+              .select('content, created_at, message_type')
+              .eq('chat_id', chat['id'])
+              .order('created_at', ascending: false)
+              .limit(1);
+          
+          if (messages.isNotEmpty) {
+            lastMessage = messages.first['content'] as String?;
+            lastMessageTime = DateTime.parse(messages.first['created_at']);
+          }
+        } catch (e) {
+          print('⚠️ Error fetching last message for chat ${chat['id']}: $e');
         }
 
-        // Conta i membri
-        final memberCount = await _supabase
-            .from('chat_members')
-            .select('user_id')
-            .eq('chat_id', chat['id'])
-            .count();
+        // Conta i membri - CORREZIONE: uso corretto del count
+        int memberCount = 0;
+        try {
+          final membersList = await _supabase
+              .from('chat_members')
+              .select('user_id')
+              .eq('chat_id', chat['id']);
+          
+          memberCount = membersList.length;
+        } catch (e) {
+          print('⚠️ Error counting members for chat ${chat['id']}: $e');
+        }
 
         processedChats.add({
           'id': chat['id'],
